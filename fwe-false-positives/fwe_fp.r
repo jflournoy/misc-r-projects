@@ -185,8 +185,13 @@ simfunction <- function(iter, pH0, pH1, tests, N, alpha, d) {
 	return(repStats)
 }
 
-#+cache=T
-repStats <- simfunction(iter, pH0, pH1, tests, N, alpha, d)
+firstSimFN <- './first_sim.rds'
+if(file.exists(firstSimFN)){
+	repStats <- readRDS(firstSimFN)
+} else {
+	repStats <- simfunction(iter, pH0, pH1, tests, N, alpha, d)
+	saveRDS(repStats, firstSimFN)
+}
 
 #'
 #' # Summary of replications
@@ -224,19 +229,24 @@ qplot(repStats$FP.rate)
 #'
 library(parallel)
 
-#+cache=T
-fweSims <- mclapply(seq(.05/100, .05, length.out=16), function(x){
-			  repStats <- simfunction(iter=1000,
-						  pH0=.9,
-						  pH1=.1,
-						  tests=100,
-						  N=50,
-						  alpha=x,
-						  d=.2)
-			  repSums <- data.frame(t(colMeans(repStats, na.rm=T)))
-			  repSums$alpha=x
-			  return(repSums)
+fweSimsFN <- './fwe_sims.rds'
+if(file.exists(fweSimsFN)){
+	fweSims <- readRDS(fweSimsFN)
+} else {
+	fweSims <- mclapply(seq(.05/100, .05, length.out=16), function(x){
+				    repStats <- simfunction(iter=1000,
+							    pH0=.9,
+							    pH1=.1,
+							    tests=100,
+							    N=50,
+							    alpha=x,
+							    d=.2)
+				    repSums <- data.frame(t(colMeans(repStats, na.rm=T)))
+				    repSums$alpha=x
+				    return(repSums)
       }, mc.cores=8)
+	saveRDS(fweSims, fweSimsFN)
+}
 			  
 fweSimsDF <- do.call(rbind, fweSims)
 
@@ -287,26 +297,31 @@ with(fweSimsDF, qplot(fp.prop, tp.prop)+geom_smooth()+scale_x_reverse())
 #' for 100 tests).
 #' 
 
-#+cache=T
 h0toh1grid <- unlist(apply(expand.grid(pH0=seq(.1, .9, length.out=10),
 			  alpha=seq(.05/100, .025, length.out=40)),
 		    1, list), recursive=F)
 
-h0Sims <- mclapply(h0toh1grid, function(x){
-			   alpha=x['alpha']
-			   pH0=x['pH0']
-			   repStats <- simfunction(iter=1000,
-						   pH0=pH0,
-						   pH1=1-pH0,
-						   tests=100,
-						   N=50,
-						   alpha=alpha,
-						   d=.2)
-			   repSums <- data.frame(t(colMeans(repStats, na.rm=T)))
-			   repSums$alpha=alpha
-			   repSums$pH0=pH0
-			   return(repSums)
+h0SimsFN <- './h0_sims.rds'
+if(file.exists(h0SimsFN)){
+	h0Sims <- readRDS(h0SimsFN)
+} else {
+	h0Sims <- mclapply(h0toh1grid, function(x){
+				   alpha=x['alpha']
+				   pH0=x['pH0']
+				   repStats <- simfunction(iter=1000,
+							   pH0=pH0,
+							   pH1=1-pH0,
+							   tests=100,
+							   N=50,
+							   alpha=alpha,
+							   d=.2)
+				   repSums <- data.frame(t(colMeans(repStats, na.rm=T)))
+				   repSums$alpha=alpha
+				   repSums$pH0=pH0
+				   return(repSums)
       }, mc.cores=8)
+	saveRDS(h0Sims, h0SimsFN)
+}
 
 h0SimsDF <- do.call(rbind, h0Sims)
 
@@ -366,32 +381,39 @@ h1graph('FWE')+geom_hline(yintercept=.05)+geom_vline(xintercept=1-exp(log(.3)/10
 #'
 #' Because power is such a huge consideration (and the major problem in the 
 #' above graphs), let's do the same thing now varying sample size. We'll keep alpha constant now
-#' at a bonferroni corrected `r (alpha <- .05)`/`r (tests <- 100)` = 
-#' `r sprintf("%.4f", alpha.c <- alpha/tests)`. We'll also keep *d* at .2 (again, a pretty 
+#' at a bonferroni corrected .05/100 = .0005. We'll also keep *d* at .2 (again, a pretty 
 #' reasonable effect size estimate). We can now
 #' look at how the false positive rate and power change as a function of sample size
 #' and the proportion of H1=T versus H0=T tests.
 #'
-#+cache=T
+
 NandH0toH1grid <- unlist(apply(expand.grid(pH0=seq(.1, .9, length.out=10),
 					   N=seq(20, 200, length.out=40)),
 			       1, list), recursive=F)
 
-NandH0Sims <- mclapply(NandH0toH1grid, function(x){
-			       N=x['N']
-			       pH0=x['pH0']
-			       repStats <- simfunction(iter=1000,
-						       pH0=pH0,
-						       pH1=1-pH0,
-						       tests=tests,
-						       N=N,
-						       alpha=alpha.c,
-						       d=.2)
-			       repSums <- data.frame(t(colMeans(repStats, na.rm=T)))
-			       repSums$N=N
-			       repSums$pH0=pH0
-			       return(repSums)
+alpha.c <- .05/100
+
+NandH0SimsFN <- './NandH0_sims.rds'
+if(file.exists(NandH0SimsFN)){
+	NandH0Sims <- readRDS(NandH0SimsFN)
+} else {
+	NandH0Sims <- mclapply(NandH0toH1grid, function(x){
+				       N=x['N']
+				       pH0=x['pH0']
+				       repStats <- simfunction(iter=1000,
+							       pH0=pH0,
+							       pH1=1-pH0,
+							       tests=tests,
+							       N=N,
+							       alpha=alpha.c,
+							       d=.2)
+				       repSums <- data.frame(t(colMeans(repStats, na.rm=T)))
+				       repSums$N=N
+				       repSums$pH0=pH0
+				       return(repSums)
       }, mc.cores=8)
+	saveRDS(NandH0Sims, NandH0SimsFN)
+}
 
 NandH0SimsDF <- do.call(rbind, NandH0Sims)
 
