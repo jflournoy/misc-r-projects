@@ -166,23 +166,39 @@ set.seed(1337)
 #'
 #' Generate the data... (this takes about 10 seconds on my computer)
 #'
-simfunction <- function(iter, pH0, pH1, tests, N, alpha, d) {
-	manyreps<-replicate(iter, 
-			    data.frame(fp=sum(replicate(round(pH0*tests),
-							t.test(rnorm(N, 0, 1))$p.value<alpha)),
-				       tp=sum(replicate(round(pH1*tests),
-							t.test(rnorm(N, d, 1))$p.value<alpha))),
-			    simplify=T)
-	manyrepsDF <- data.frame(fp=unlist(manyreps['fp', ]),
-				 tp=unlist(manyreps['tp', ]))
-	repStats <- within(manyrepsDF, { #For each row do:
-				   FWE <- as.numeric(fp>0) #is there at least 1 false positive?
-				   total.hits <- fp+tp #how many detections?
-				   FP.rate <- fp/total.hits #fp rate
-				   fp.prop <- fp/round(pH0*tests) #out of all our tests of H0 voxels, how many positives?
-				   tp.prop <- tp/round(pH1*tests) #out of all our tests of H1 voxels, how many positives?
-				 })	       
-	return(repStats)
+library(dplyr)
+simfunction <- function(iter, pH0, pH1, tests, N, alpha, d, summarize.pvals=T) {
+	#This code has changed a bit since I wrote the above, 
+	#but it still basically works the same way. This
+	#just allows one to return each t.test if return.all==T
+	if(summarize.pvals){
+		manyrepsDF <- bind_rows(replicate(iter, 
+						  data_frame(fp=sum(replicate(round(pH0*tests),
+									       t.test(rnorm(N, 0, 1))$p.value<alpha,
+									       simplify=T)),
+							     tp=sum(replicate(round(pH1*tests),
+									       t.test(rnorm(N, d, 1))$p.value<alpha,
+									       simplify=T))),
+						  simplify=F))		
+		repStats <- within(manyrepsDF, { #For each row do:
+						  FWE <- as.numeric(fp>0) #is there at least 1 false positive?
+						  total.hits <- fp+tp #how many detections?
+						  FP.rate <- fp/total.hits #fp rate
+						  fp.prop <- fp/round(pH0*tests) #out of all our tests of H0 voxels, how many positives?
+						  tp.prop <- tp/round(pH1*tests) #out of all our tests of H1 voxels, how many positives?
+				})	       
+		return(repStats)
+	} else {
+		manyrepsDF.all <-bind_rows(replicate(iter, 
+						     data_frame(fp=list(replicate(round(pH0*tests),
+										  t.test(rnorm(N, 0, 1)),
+										  simplify=F)),
+								tp=list(replicate(round(pH1*tests),
+										  t.test(rnorm(N, d, 1)),
+										  simplify=F))),
+						     simplify=F))
+		return(manyrepsDF.all)
+	}
 }
 
 firstSimFN <- './first_sim.rds'
@@ -443,3 +459,186 @@ NandH1graph('total.hits')
 
 NandH1graph('fp.prop')
 NandH1graph('FWE')+geom_hline(yintercept=.05)
+
+#'
+#' # Publication Bias
+#'
+#' This got me thinking about observed effect sizes in the literature. Surely, 
+#' given the false positive rate above, the reported peak voxels in fMRI
+#' studies are a crazy mix of true and false positives. What
+#' happens if we try to recover an effect size from such a data set? What
+#' does the funnel plot look like?
+#'
+
+metaGrid <- unlist(apply(expand.grid(alpha=c(.001, .0005), 
+				     N=c(30, 60, 120, 240)),
+			 1, list), recursive=F)
+
+metaSimsFN <- './meta_sims.rds'
+if(file.exists(metaSimsFN)){
+	metaSims <- readRDS(metaSimsFN)
+} else {
+	metaSims <- mclapply(metaGrid, function(x){
+				     N=x['N']
+				     alpha=x['alpha']
+				     someSims <- simfunction(iter=1000,
+							     pH0=.9,
+							     pH1=.1,
+							     tests=100,
+							     N=N,
+							     alpha=alpha,
+							     d=.2,
+							     summarize.pvals=F)
+				     return(data_frame(sims=list(someSims),
+						       alpha=alpha,
+						       N=N))
+      }, mc.cores=8)
+	saveRDS(metaSims, metaSimsFN)
+}
+
+get.sig.t <- function(x, pcut, opt.info=list()) {
+	if(x$p.value<pcut){
+		c(list(t=x$statistic, 
+		       p=x$p.value),
+		  opt.info)
+	} else {
+		list()
+	}
+}
+
+tstats.sig <- bind_rows(metaSims) %>% 
+	rowwise %>%
+	do({
+		THEALPHA <- .$alpha	
+		newdf <- .$sims %>%
+			mutate(study.id=1:1000) %>%
+			rowwise() %>%
+			do(bind_rows(bind_rows(lapply(.$fp, get.sig.t, 
+							pcut=THEALPHA,
+							opt.info=list(H0=T,
+								      id=.$study.id))),
+				     bind_rows(lapply(.$tp, get.sig.t, 
+							pcut=THEALPHA,
+							opt.info=list(H0=F,
+								      id=.$study.id)))))
+		newdf$alpha <- THEALPHA
+		newdf$N <- .$N
+		newdf
+	})
+
+
+aDF <- data.frame(N=1:10000)
+mlmData <- bind_rows(aDF, tstats.sig) %>%
+	mutate(denom=N^.5,
+	       sig95=1.96/denom, 
+	       sig999=3.29/denom,
+	       sig9995=3.48/denom,
+	       es=t/denom,
+	       se=1/denom) 
+	
+library(lme4)
+mod001 <- lmer(es~1+se+(1|id), data=subset(mlmData, alpha==.001),
+	       weights=N)
+summary(mod001)
+mod001.fx <- fixef(mod001)
+
+mod0005 <- lmer(es~1+se+(1|id), data=subset(mlmData, alpha==.0005),
+		weights=N)
+summary(mod0005)
+mod0005.fx <- fixef(mod0005)
+
+library(MASS)
+mod001.rlm <- rlm(es~1+se, data=subset(mlmData, alpha==.001),
+	       weights=N)
+summary(mod001.rlm)
+mod001.rlm.fx <- coef(mod001.rlm)
+
+mod0005.rlm <- rlm(es~1+se, data=subset(mlmData, alpha==.0005),
+		weights=N)
+summary(mod0005.rlm)
+mod0005.rlm.fx <- coef(mod0005.rlm)
+
+meanES.0005 <- mean(mlmData$es[mlmData$alpha%in%c(.0005)])
+meanES.001 <- mean(mlmData$es[mlmData$alpha%in%c(.001)])
+#'
+#' ## test-wise alpha < .001
+#'
+#' In the graph below, aside from the anotated lines, the red line
+#' is the true effect size *d* = 0.2, and the blue line is the
+#' average effect size in this sample of study replications (d = `r round(meanES.001,2)`).
+#'
+mlmData %>% filter(!alpha%in%c(.001)) %>%
+	ggplot(aes(x=1/denom, y=t/denom))+
+	geom_hline(yintercept=0)+
+	geom_vline(xintercept=0)+
+	geom_hline(yintercept=.2, color='red', alpha=.5)+
+	geom_hline(yintercept=meanES.001, color='blue', alpha=.5)+
+	geom_line(aes(x=1/denom, y=sig95, linetype='p<.05', alpha='p<.05'))+
+	geom_line(aes(x=1/denom, y=sig999, linetype='p<.001', alpha='p<.001'))+
+	geom_line(aes(x=1/denom, y=sig9995, linetype='p<.0005', alpha='p<.0005'))+
+	geom_line(aes(x=1/denom, y=-sig95, linetype='p<.05', alpha='p<.05'))+
+	geom_line(aes(x=1/denom, y=-sig999, linetype='p<.001', alpha='p<.001'))+
+	geom_line(aes(x=1/denom, y=-sig9995, linetype='p<.0005', alpha='p<.0005'))+
+	geom_line(data=data.frame(y=c(mod001.fx['(Intercept)'], 
+				      mod001.fx['(Intercept)']+mod001.fx['se']),  
+				  x=c(0, 1)), 
+		  aes(x=x, y=y, linetype='mlm', alpha='mlm'))+
+	geom_line(data=data.frame(y=c(mod001.rlm.fx['(Intercept)'], 
+				      mod001.rlm.fx['(Intercept)']+mod001.rlm.fx['se']),  
+				  x=c(0, 1)), 
+		  aes(x=x, y=y, linetype='rlm', alpha='rlm'))+
+	geom_point(aes(color=H0), alpha=.5, position=position_jitter(h=.01, w=.005))+
+	scale_alpha_manual(breaks=c('rlm', 'mlm', 'p<.05', 'p<.001', 'p<.0005'), 
+			   values=c('rlm'=1, 'mlm'=1, 'p<.05'=.5, 'p<.001'=.4, 'p<.0005'=.3), 
+			   labels=c('rlm est', 'mlm est', 'p<.05', 'p<.001', 'p<.0005'),
+			   guide=guide_legend(title='Lines'))+
+	scale_linetype_manual(breaks=c('rlm', 'mlm', 'p<.05', 'p<.001', 'p<.0005'), 
+			      values=c('rlm'=2, 'mlm'=1, 'p<.05'=3, 'p<.001'=3, 'p<.0005'=3), 
+			      labels=c('rlm est', 'mlm est', 'p<.05', 'p<.001', 'p<.0005'),
+			      guide=guide_legend(title='Lines'))+
+	coord_cartesian(y=c(-1.5,1.5), x=c(-.0005, 1/30^.5))+
+	labs(title='Simulated Data: Test-wise alpha<.001',
+	     x=expression(frac(1,sqrt(N))),
+	     y=expression(d=frac(Statistic, sqrt(N))))
+
+#'
+#' ## test-wise alpha < .0005
+#'
+#' In the graph below, aside from the anotated lines, the red line
+#' is the true effect size *d* = 0.2, and the blue line is the
+#' average effect size in this sample of study replications (d = `r round(meanES.0005,2)`).
+#'
+mlmData %>% filter(!alpha%in%c(.0005)) %>%
+	ggplot(aes(x=1/denom, y=t/denom))+
+	geom_hline(yintercept=0)+
+	geom_vline(xintercept=0)+
+	geom_hline(yintercept=.2, color='red', alpha=.5)+
+	geom_hline(yintercept=meanES.0005, color='blue', alpha=.5)+
+	geom_line(aes(x=1/denom, y=sig95, linetype='p<.05', alpha='p<.05'))+
+	geom_line(aes(x=1/denom, y=sig999, linetype='p<.001', alpha='p<.001'))+
+	geom_line(aes(x=1/denom, y=sig9995, linetype='p<.0005', alpha='p<.0005'))+
+	geom_line(aes(x=1/denom, y=-sig95, linetype='p<.05', alpha='p<.05'))+
+	geom_line(aes(x=1/denom, y=-sig999, linetype='p<.001', alpha='p<.001'))+
+	geom_line(aes(x=1/denom, y=-sig9995, linetype='p<.0005', alpha='p<.0005'))+
+	geom_line(data=data.frame(y=c(mod0005.fx['(Intercept)'], 
+				      mod0005.fx['(Intercept)']+mod0005.fx['se']),  
+				  x=c(0, 1)), 
+		  aes(x=x, y=y, linetype='mlm', alpha='mlm'))+
+	geom_line(data=data.frame(y=c(mod0005.rlm.fx['(Intercept)'], 
+				      mod0005.rlm.fx['(Intercept)']+mod0005.rlm.fx['se']),  
+				  x=c(0, 1)), 
+		  aes(x=x, y=y, linetype='rlm', alpha='rlm'))+
+	geom_point(aes(color=H0), alpha=.5, position=position_jitter(h=.01, w=.005))+
+	scale_alpha_manual(breaks=c('rlm', 'mlm', 'p<.05', 'p<.001', 'p<.0005'), 
+			   values=c('rlm'=1, 'mlm'=1, 'p<.05'=.5, 'p<.001'=.4, 'p<.0005'=.3), 
+			   labels=c('rlm est', 'mlm est', 'p<.05', 'p<.001', 'p<.0005'),
+			   guide=guide_legend(title='Lines'))+
+	scale_linetype_manual(breaks=c('rlm', 'mlm', 'p<.05', 'p<.001', 'p<.0005'), 
+			      values=c('rlm'=2, 'mlm'=1, 'p<.05'=3, 'p<.001'=3, 'p<.0005'=3), 
+			      labels=c('rlm est', 'mlm est', 'p<.05', 'p<.001', 'p<.0005'),
+			      guide=guide_legend(title='Lines'))+
+	coord_cartesian(y=c(-1.5,1.5), x=c(-.0005, 1/30^.5))+
+	labs(title='Simulated Data: Test-wise alpha<.0005',
+	     x=expression(frac(1,sqrt(N))),
+	     y=expression(d=frac(Statistic, sqrt(N))))
+	
