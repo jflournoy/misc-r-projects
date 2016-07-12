@@ -469,7 +469,17 @@ NandH1graph('FWE')+geom_hline(yintercept=.05)
 #' happens if we try to recover an effect size from such a data set? What
 #' does the funnel plot look like?
 #'
-
+#' As far as I can tell, even with a small true effect in this data
+#' (*d*=.2), it's hard to tell from the funnel plot that anything
+#' is actually going on. Indeed, I've been skeptical of very
+#' similar looking plots. 
+#'
+#' Notice that if we just take an average of effect sizes across
+#' all studies, we get a rather inflated estimate, but if we
+#' try to regress out the effect of standard error on the effect size
+#' estimate, we underestimate the true effect size.
+#'
+#'
 metaGrid <- unlist(apply(expand.grid(alpha=c(.001, .0005), 
 				     N=c(30, 60, 120, 240)),
 			 1, list), recursive=F)
@@ -560,6 +570,8 @@ mod0005.rlm.fx <- coef(mod0005.rlm)
 
 meanES.0005 <- mean(mlmData$es[mlmData$alpha%in%c(.0005)])
 meanES.001 <- mean(mlmData$es[mlmData$alpha%in%c(.001)])
+
+
 #'
 #' ## test-wise alpha < .001
 #'
