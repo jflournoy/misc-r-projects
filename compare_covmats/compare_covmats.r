@@ -2,7 +2,7 @@ library(lavaan)
 library(MASS)
 
 #' Set seed so this is reproducible
-set.seed(990022)
+set.seed(534435)
 #' create two distinct population level correlation matrices
 cor1 <- matrix(c(1.00,  .20, -.20,  .60,
 		  .20, 1.00,  .05,  .30,
