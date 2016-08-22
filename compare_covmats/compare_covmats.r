@@ -85,7 +85,10 @@ fit.grouped.h <- lavaan(model=covModel, data=aDF.h, group='group', meanstructure
 #' Interestingly, here you do get a little bit better fit just by breaking up
 #'  the observations. This is perhaps a nice demonstration that just adding
 #'  parameters for no reason can give you better fit with the likelihood ratio
-#'  test (but the p value is still > .05).
+#'  test (but the p value is still > .05). I *have* run this code with
+#'  a different seed and seen improved fit by adding an arbitrary grouping, 
+#'  but hopefully this shouldn't happen very often. This will 
+#'  be the topic of a future snippet.
 n2llDiff.h <- -2*logLik(fit.homogeneity.h) - -2*logLik(fit.grouped.h) 
 print(n2llDiff.h)
 pchisq(as.numeric(n2llDiff.h),  df=attr(n2llDiff.h, 'df'), lower.tail=F)
