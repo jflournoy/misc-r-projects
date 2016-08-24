@@ -26,7 +26,7 @@ $$
 \end{equation} 
 $$
 
-The model in equation \\ref{corteq} says that every *i*th cortisol observation, for the *j*th participant, is predicted by an intercept ($\beta_{0j}$), and a linear lope ($\beta_{1j}$). This is equivalent to a linear model that you're used to in lm: \texttt{y $\sim$ 1 + time}. "$\text{time}_{ij}$", in this case, is whatever you want to use -- it's probably going to be the time of day the measurement was taken for the *i*th cortisol observation, for the *j*th participant. 
+The model in equation \\ref{corteq} says that every *i*th cortisol observation, for the *j*th participant, is predicted by an intercept ($\beta_{0j}$), and a linear lope ($\beta_{1j}$). This is equivalent to a linear model that you're used to in lm: `y $\sim$ 1 + time`. "$\text{time}_{ij}$", in this case, is whatever you want to use -- it's probably going to be the time of day the measurement was taken for the *i*th cortisol observation, for the *j*th participant. 
 
 You're grouping all your observations by subject, and so you can get a random effect (variation across subjects) for both the intercept and slope. That is, each of those parameters gets its own equation, which you see as the second two parts of eq \\ref{corteq}. And just as $\epsilon_{ij}$ is the deviation of every observation from the prediction, $u_{0j}$ and $u_{1j}$ is the deviation of every subject's predicted intercept and slope from the overall mean intercept and slope across all subjects. It just stands in for the fact that we're letting the slope and intercept be different for each person.
 
@@ -43,7 +43,7 @@ $$
 \end{equation}
 $$
 
-When we use \texttt{lmer} to estimate the model, we only give it one equation. So what we need to do is substitute the equations for $\beta_{0j}$ and $\beta_{1j}$ in to get everything in term of the $\gamma$ parameters (notice that our "$\text{time}_{ij}$" variable gets multiplied through the equation for $\beta_{1j}$ and creates the interaction term $\text{SES}_{j}\times \text{time}$):
+When we use `lmer` to estimate the model, we only give it one equation. So what we need to do is substitute the equations for $\beta_{0j}$ and $\beta_{1j}$ in to get everything in term of the $\gamma$ parameters (notice that our "$\text{time}_{ij}$" variable gets multiplied through the equation for $\beta_{1j}$ and creates the interaction term $\text{SES}_{j}\times \text{time}$):
 
 $$
 \begin{equation} 
@@ -61,7 +61,7 @@ $$
 
 The final equation in \\ref{corteqsingle} is just reordered so that we group our fixed effects together, and our random effects and error together. Also, I'm just using "$\cdot$" and "$\times$" to set apart parameters and variable interactions a bit.
 
-So now we have our full model equation, and we can give it to \texttt{lmer}:
+So now we have our full model equation, and we can give it to `lmer`:
 
 ```{r eval=F}
 aModel <- lmer(cort ~ 1 + SES + time + SES:time + 
@@ -72,4 +72,4 @@ summary(aModel)
 
 It doesn't really matter that you have two days of data per person, because we just care about the time of day. You could potentially add another grouping by day, but it might make things more complicated than necessary.
 
-When you get output from \texttt{summary}, you'll look at the term \texttt{SES:time} to see if a subject's SES predicts their cortisol slope. This is because in equation \\ref{corteqfull}, $\gamma_{11}$ is the parameter for SES predicting $\beta_{1j}$, which is your cortisol slope parameter. This parameter sticks around in the final equation \\ref{corteqsingle} for the interaction term.
+When you get output from `summary`, you'll look at the term `SES:time` to see if a subject's SES predicts their cortisol slope. This is because in equation \\ref{corteqfull}, $\gamma_{11}$ is the parameter for SES predicting $\beta_{1j}$, which is your cortisol slope parameter. This parameter sticks around in the final equation \\ref{corteqsingle} for the interaction term.

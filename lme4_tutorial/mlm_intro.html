@@ -132,7 +132,7 @@ MathJax.Hub.Config({
 \label{corteq}
 \end{equation} 
 \]</span></p>
-<p>The model in equation \ref{corteq} says that every <em>i</em>th cortisol observation, for the <em>j</em>th participant, is predicted by an intercept (<span class="math">\(\beta_{0j}\)</span>), and a linear lope (<span class="math">\(\beta_{1j}\)</span>). This is equivalent to a linear model that you’re used to in lm: . “<span class="math">\(\text{time}_{ij}\)</span>”, in this case, is whatever you want to use – it’s probably going to be the time of day the measurement was taken for the <em>i</em>th cortisol observation, for the <em>j</em>th participant.</p>
+<p>The model in equation \ref{corteq} says that every <em>i</em>th cortisol observation, for the <em>j</em>th participant, is predicted by an intercept (<span class="math">\(\beta_{0j}\)</span>), and a linear lope (<span class="math">\(\beta_{1j}\)</span>). This is equivalent to a linear model that you’re used to in lm: <code>y $\sim$ 1 + time</code>. “<span class="math">\(\text{time}_{ij}\)</span>”, in this case, is whatever you want to use – it’s probably going to be the time of day the measurement was taken for the <em>i</em>th cortisol observation, for the <em>j</em>th participant.</p>
 <p>You’re grouping all your observations by subject, and so you can get a random effect (variation across subjects) for both the intercept and slope. That is, each of those parameters gets its own equation, which you see as the second two parts of eq \ref{corteq}. And just as <span class="math">\(\epsilon_{ij}\)</span> is the deviation of every observation from the prediction, <span class="math">\(u_{0j}\)</span> and <span class="math">\(u_{1j}\)</span> is the deviation of every subject’s predicted intercept and slope from the overall mean intercept and slope across all subjects. It just stands in for the fact that we’re letting the slope and intercept be different for each person.</p>
 <p>For <span class="math">\(\beta_{0j}\)</span> and <span class="math">\(\beta_{1j}\)</span> you might have multiple predictors you’re interested in, so I’ve just indicated that as “<span class="math">\(\gamma_{0/1[\ldots]}\cdot\text{intercept/slope predictors}\)</span>”. But let’s say you have just one subject level predictor for each of those subject-specific slopes and intercepts. I’ll use SES as the intercept and slope predictor (though you could, in principle, use different predictors for each parameter). The three equations would be:</p>
 <p><span class="math">\[
@@ -145,7 +145,7 @@ MathJax.Hub.Config({
 \label{corteqfull}
 \end{equation}
 \]</span></p>
-<p>When we use  to estimate the model, we only give it one equation. So what we need to do is substitute the equations for <span class="math">\(\beta_{0j}\)</span> and <span class="math">\(\beta_{1j}\)</span> in to get everything in term of the <span class="math">\(\gamma\)</span> parameters (notice that our “<span class="math">\(\text{time}_{ij}\)</span>” variable gets multiplied through the equation for <span class="math">\(\beta_{1j}\)</span> and creates the interaction term <span class="math">\(\text{SES}_{j}\times \text{time}\)</span>):</p>
+<p>When we use <code>lmer</code> to estimate the model, we only give it one equation. So what we need to do is substitute the equations for <span class="math">\(\beta_{0j}\)</span> and <span class="math">\(\beta_{1j}\)</span> in to get everything in term of the <span class="math">\(\gamma\)</span> parameters (notice that our “<span class="math">\(\text{time}_{ij}\)</span>” variable gets multiplied through the equation for <span class="math">\(\beta_{1j}\)</span> and creates the interaction term <span class="math">\(\text{SES}_{j}\times \text{time}\)</span>):</p>
 <p><span class="math">\[
 \begin{equation} 
 \begin{split}
@@ -160,13 +160,13 @@ MathJax.Hub.Config({
 \end{equation}
 \]</span></p>
 <p>The final equation in \ref{corteqsingle} is just reordered so that we group our fixed effects together, and our random effects and error together. Also, I’m just using “<span class="math">\(\cdot\)</span>” and “<span class="math">\(\times\)</span>” to set apart parameters and variable interactions a bit.</p>
-<p>So now we have our full model equation, and we can give it to :</p>
+<p>So now we have our full model equation, and we can give it to <code>lmer</code>:</p>
 <pre class="r"><code>aModel &lt;- lmer(cort ~ 1 + SES + time + SES:time + 
                      (1 + time | SID), 
                data=yourData)
 summary(aModel)</code></pre>
 <p>It doesn’t really matter that you have two days of data per person, because we just care about the time of day. You could potentially add another grouping by day, but it might make things more complicated than necessary.</p>
-<p>When you get output from , you’ll look at the term  to see if a subject’s SES predicts their cortisol slope. This is because in equation \ref{corteqfull}, <span class="math">\(\gamma_{11}\)</span> is the parameter for SES predicting <span class="math">\(\beta_{1j}\)</span>, which is your cortisol slope parameter. This parameter sticks around in the final equation \ref{corteqsingle} for the interaction term.</p>
+<p>When you get output from <code>summary</code>, you’ll look at the term <code>SES:time</code> to see if a subject’s SES predicts their cortisol slope. This is because in equation \ref{corteqfull}, <span class="math">\(\gamma_{11}\)</span> is the parameter for SES predicting <span class="math">\(\beta_{1j}\)</span>, which is your cortisol slope parameter. This parameter sticks around in the final equation \ref{corteqsingle} for the interaction term.</p>
 
 
 
