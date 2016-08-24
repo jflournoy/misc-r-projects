@@ -36,23 +36,23 @@ $$
 \begin{equation} 
 \begin{split}
 \text{cort}_{ij} &=\beta_{0j}+\beta_{1j} \cdot \text{time}_{ij}+\epsilon_{ij}\\
-\beta_{0j} &=\gamma_{00}+\gamma_{01}\cdot\text{SES}+u_{0j}\\
-\beta_{1j} &=\gamma_{10}+\gamma_{11}\cdot\text{SES}+u_{1j}
+\beta_{0j} &=\gamma_{00}+\gamma_{01}\cdot\text{SES}_{j}+u_{0j}\\
+\beta_{1j} &=\gamma_{10}+\gamma_{11}\cdot\text{SES}_{j}+u_{1j}
 \end{split}
 \label{corteqfull}
 \end{equation}
 $$
 
-When we use \texttt{lmer} to estimate the model, we only give it one equation. So what we need to do is substitute the equations for $\beta_{0j}$ and $\beta_{1j}$ in to get everything in term of the $\gamma$ parameters (notice that our "$\text{time}_{ij}$" variable gets multiplied through the equation for $\beta_{1j}$ and creates the interaction term $\text{SES}\times \text{time}$):
+When we use \texttt{lmer} to estimate the model, we only give it one equation. So what we need to do is substitute the equations for $\beta_{0j}$ and $\beta_{1j}$ in to get everything in term of the $\gamma$ parameters (notice that our "$\text{time}_{ij}$" variable gets multiplied through the equation for $\beta_{1j}$ and creates the interaction term $\text{SES}_{j}\times \text{time}$):
 
 $$
 \begin{equation} 
 \begin{split}
-\text{cort}_{ij} =& \gamma_{00}+\gamma_{01}\cdot\text{SES}+u_{0j}+\\
-&(\gamma_{10}+\gamma_{11}\cdot\text{SES}+u_{1j}) \cdot \text{time}_{ij}+\epsilon_{ij}\\
-\text{cort}_{ij} =& \gamma_{00}+\gamma_{01}\cdot\text{SES}+u_{0j}+\\
-&\gamma_{10}\cdot \text{time}_{ij}+\gamma_{11}\cdot\text{SES}\times \text{time}_{ij}+u_{1j}\cdot \text{time}_{ij} +\epsilon_{ij}\\
-\text{cort}_{ij} =& \gamma_{00}+\gamma_{01}\cdot\text{SES}+\gamma_{10}\cdot \text{time}_{ij}+\gamma_{11}\cdot\text{SES}\times \text{time}_{ij}+\\
+\text{cort}_{ij} =& \gamma_{00}+\gamma_{01}\cdot\text{SES}_{j}+u_{0j}+\\
+&(\gamma_{10}+\gamma_{11}\cdot\text{SES}_{j}+u_{1j}) \cdot \text{time}_{ij}+\epsilon_{ij}\\
+\text{cort}_{ij} =& \gamma_{00}+\gamma_{01}\cdot\text{SES}_{j}+u_{0j}+\\
+&\gamma_{10}\cdot \text{time}_{ij}+\gamma_{11}\cdot\text{SES}_{j}\times \text{time}_{ij}+u_{1j}\cdot \text{time}_{ij} +\epsilon_{ij}\\
+\text{cort}_{ij} =& \gamma_{00}+\gamma_{01}\cdot\text{SES}_{j}+\gamma_{10}\cdot \text{time}_{ij}+\gamma_{11}\cdot\text{SES}_{j}\times \text{time}_{ij}+\\
 &u_{0j}+u_{1j}\cdot \text{time}_{ij} +\epsilon_{ij}
 \end{split}
 \label{corteqsingle}

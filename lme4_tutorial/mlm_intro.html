@@ -139,21 +139,21 @@ MathJax.Hub.Config({
 \begin{equation} 
 \begin{split}
 \text{cort}_{ij} &amp;=\beta_{0j}+\beta_{1j} \cdot \text{time}_{ij}+\epsilon_{ij}\\
-\beta_{0j} &amp;=\gamma_{00}+\gamma_{01}\cdot\text{SES}+u_{0j}\\
-\beta_{1j} &amp;=\gamma_{10}+\gamma_{11}\cdot\text{SES}+u_{1j}
+\beta_{0j} &amp;=\gamma_{00}+\gamma_{01}\cdot\text{SES}_{j}+u_{0j}\\
+\beta_{1j} &amp;=\gamma_{10}+\gamma_{11}\cdot\text{SES}_{j}+u_{1j}
 \end{split}
 \label{corteqfull}
 \end{equation}
 \]</span></p>
-<p>When we use  to estimate the model, we only give it one equation. So what we need to do is substitute the equations for <span class="math">\(\beta_{0j}\)</span> and <span class="math">\(\beta_{1j}\)</span> in to get everything in term of the <span class="math">\(\gamma\)</span> parameters (notice that our “<span class="math">\(\text{time}_{ij}\)</span>” variable gets multiplied through the equation for <span class="math">\(\beta_{1j}\)</span> and creates the interaction term <span class="math">\(\text{SES}\times \text{time}\)</span>):</p>
+<p>When we use  to estimate the model, we only give it one equation. So what we need to do is substitute the equations for <span class="math">\(\beta_{0j}\)</span> and <span class="math">\(\beta_{1j}\)</span> in to get everything in term of the <span class="math">\(\gamma\)</span> parameters (notice that our “<span class="math">\(\text{time}_{ij}\)</span>” variable gets multiplied through the equation for <span class="math">\(\beta_{1j}\)</span> and creates the interaction term <span class="math">\(\text{SES}_{j}\times \text{time}\)</span>):</p>
 <p><span class="math">\[
 \begin{equation} 
 \begin{split}
-\text{cort}_{ij} =&amp; \gamma_{00}+\gamma_{01}\cdot\text{SES}+u_{0j}+\\
-&amp;(\gamma_{10}+\gamma_{11}\cdot\text{SES}+u_{1j}) \cdot \text{time}_{ij}+\epsilon_{ij}\\
-\text{cort}_{ij} =&amp; \gamma_{00}+\gamma_{01}\cdot\text{SES}+u_{0j}+\\
-&amp;\gamma_{10}\cdot \text{time}_{ij}+\gamma_{11}\cdot\text{SES}\times \text{time}_{ij}+u_{1j}\cdot \text{time}_{ij} +\epsilon_{ij}\\
-\text{cort}_{ij} =&amp; \gamma_{00}+\gamma_{01}\cdot\text{SES}+\gamma_{10}\cdot \text{time}_{ij}+\gamma_{11}\cdot\text{SES}\times \text{time}_{ij}+\\
+\text{cort}_{ij} =&amp; \gamma_{00}+\gamma_{01}\cdot\text{SES}_{j}+u_{0j}+\\
+&amp;(\gamma_{10}+\gamma_{11}\cdot\text{SES}_{j}+u_{1j}) \cdot \text{time}_{ij}+\epsilon_{ij}\\
+\text{cort}_{ij} =&amp; \gamma_{00}+\gamma_{01}\cdot\text{SES}_{j}+u_{0j}+\\
+&amp;\gamma_{10}\cdot \text{time}_{ij}+\gamma_{11}\cdot\text{SES}_{j}\times \text{time}_{ij}+u_{1j}\cdot \text{time}_{ij} +\epsilon_{ij}\\
+\text{cort}_{ij} =&amp; \gamma_{00}+\gamma_{01}\cdot\text{SES}_{j}+\gamma_{10}\cdot \text{time}_{ij}+\gamma_{11}\cdot\text{SES}_{j}\times \text{time}_{ij}+\\
 &amp;u_{0j}+u_{1j}\cdot \text{time}_{ij} +\epsilon_{ij}
 \end{split}
 \label{corteqsingle}
