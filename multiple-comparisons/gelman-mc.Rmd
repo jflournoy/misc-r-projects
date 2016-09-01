@@ -1,0 +1,113 @@
+---
+layout: post
+title: "Exploring Gelman's Multiple Comparison Solution"
+date: 2016-09-1
+categories: R
+tags: exploring, r, multiple comparisons
+---
+
+
+```{r}
+library(arm)
+library(ggplot2)
+library(tidyr)
+
+spidey <- function(sigma, tau, N, mu2=NA, N2=.2*N, print=T) {
+  mu1 <- 0	
+  theta <- rnorm(N, 0, tau)
+  dist_name <- rep('theta', N) 
+  if(!is.na(mu2)){
+    cat("mu1 = ", mu1, ", mu2 = ", mu2, ", sigma = ", sigma, ", tau = ", tau, ", N = ", N, "\n", sep="")
+    theta2 <- rnorm(N2, mu2, tau)
+    dist_name2 <- rep('theta2', N2)
+    theta <- c(theta, theta2)
+    dist_name <- c(dist_name, dist_name2)
+    Ntot <- N+N2
+  } else {
+    cat("mu = 0", ", sigma = ", sigma, ", tau = ", tau, ", N = ", N, "\n", sep="")
+    Ntot <- N
+  }	  
+  y <- theta + rnorm(Ntot, 0, sigma)
+  signif_classical <- abs(y) > abs(qnorm(.05/2, 0, sigma))
+  signif_classical_fwe <- abs(y) > abs(qnorm(.05/2/Ntot, 0, sigma))
+  theta_hat_bayes <- y * (1/sigma^2) / (1/sigma^2 + 1/tau^2)
+  theta_se_bayes <- sqrt(1 / (1/sigma^2 + 1/tau^2))
+  signif_bayes <- abs(theta_hat_bayes) > 2*theta_se_bayes
+  if(print){
+    cat(sum(signif_classical), " (", fround(100*mean(signif_classical), 1), "%) of the 95% classical intervals exclude 0\n", sep="")
+    cat("Mean absolute value of these classical estimates is", fround(mean(abs(y)[signif_classical]), 2), "\n")
+    cat("Mean absolute value of the corresponding true parameters is", fround(mean(abs(theta)[signif_classical]), 2), "\n")
+    cat(fround(100*mean((sign(theta)!=sign(y))[signif_classical]), 1), "% of these are the wrong sign (Type S error)\n", sep="")
+    cat(sum(signif_classical_fwe), " (", fround(100*mean(signif_classical_fwe), 1), "%) of the 95% classical FWE intervals exclude 0\n", sep="")
+    cat("Mean absolute value of these classical FWE estimates is", fround(mean(abs(y)[signif_classical_fwe]), 2), "\n")
+    cat("Mean absolute value of the corresponding true parameters is", fround(mean(abs(theta)[signif_classical_fwe]), 2), "\n")
+    cat(fround(100*mean((sign(theta)!=sign(y))[signif_classical_fwe]), 1), "% of these are the wrong sign (Type S error)\n", sep="")
+    cat(sum(signif_bayes), " (", fround(100*mean(signif_bayes), 1), "%) of the 95% posterior intervals exclude 0\n", sep="")
+    cat("Mean absolute value of these Bayes estimates is", fround(mean(abs(theta_hat_bayes)[signif_bayes]), 2), "\n")
+    cat("Mean absolute value of the corresponding true parameters is", fround(mean(abs(theta)[signif_bayes]), 2), "\n")
+    cat(fround(100*mean((sign(theta)!=sign(theta_hat_bayes))[signif_bayes]), 1), "% of these are the wrong sign (Type S error)\n", sep="")
+  }
+  data.frame(y=y,
+	     theta=theta,
+	     dist=dist_name,
+	     signif_classical=signif_classical,
+	     signif_classical_fwe=signif_classical_fwe,
+	     theta_hat_bayes=theta_hat_bayes,
+	     theta_se_bayes=theta_se_bayes,
+	     signif_bayes=signif_bayes)
+}
+
+sigma <- 1
+tau <- .5
+N <- 1e6
+N2 <- .2*N
+aDFsingle <- spidey(sigma, tau, N)	
+aDFdouble <- spidey(sigma, tau, N, mu2=.5*tau, N2=N2)	
+
+data.frame(t(sapply(aDFsingle[, c('signif_bayes', 'signif_classical', 'signif_classical_fwe')], sum)/N))
+
+ggplot(aDFsingle, aes(x=y))+
+	geom_histogram(aes(fill=sigclass))
+
+ggplot(aDFdouble, aes(x=y))+
+	geom_histogram(aes(fill=sigclass))+
+	facet_wrap(~dist)
+
+ggplot(aDFsingle, aes(x=y))+
+	geom_histogram(aes(fill=signif_bayes))
+
+ggplot(aDFdouble, aes(x=y))+
+	geom_histogram(aes(fill=signif_bayes))+
+	facet_wrap(~dist)
+
+ggplot(aDFdouble[sample(c(F, T), replace=T, size=N+N2, prob=c(.8, .2)), ], 
+			aes(x=theta, y=y))+
+	geom_point(aes(color=signif_bayes), alpha=1)+
+	facet_wrap(~dist)
+
+rezs <- lapply(seq(.01, 3, .05), 
+      function(tau){
+	      aDF <- spidey(sigma, tau, N, print=F)
+	      rezDF <- data.frame(t(sapply(aDF[, c('signif_bayes', 
+						   'signif_classical', 
+						   'signif_classical_fwe')], sum)/N))
+	      rezDF$tau <- tau
+	      rezDF$tausigma <- tau/sigma
+	      rezDF
+      })
+
+rezDF <- do.call(rbind, rezs) %>%
+	gather(test, propclaims, -tausigma, -tau)
+#What i've learned here is that we're picking up on more stuff than FWE affords us.
+#So, we're not losing as much power. What do we gain? Better estimation, perhaps.
+#
+#I should also plot the degree of M distortion, and Sign distortion from each test.
+#
+#And power.
+#
+#And then test mixtures of distributions
+ggplot(rezDF, aes(x=tausigma, y=propclaims, group=test))+
+	geom_point()+
+	geom_line(aes(color=test))
+
+```
