@@ -1,19 +1,29 @@
 ---
-title: "Brief intro to MLM with lme4"
-output:
-  html_document
+layout: post
+title: "Brief MLM tutorial"
+date: 2016-08-25 15:30:00 -0700
+categories: R tutorials
 ---
 
 <script type="text/x-mathjax-config">
 MathJax.Hub.Config({
   TeX: { 
-      equationNumbers: {
- 
-            autoNumber: "AMS"
-      } 
+    TagSide: "left",
+    equationNumbers: {
+      autoNumber: "AMS"
+    } 
+  },
+  "HTML-CSS": {
+    linebreaks: {
+      width: "80% containter"
+    }
   }
 });
 </script>
+
+This is a brief description of how to think about multi-level models, especially the link between the formal expression of these models and how that looks in `lme4`. The data set consists of 4 observations per day over 2 days of cortisol in a developmental sample. The relevant theoretical questions are: what individual-level predictors are related to cortisol intercepts and slopes.
+
+<!--more-->
 
 $$
 \begin{equation} 
@@ -43,7 +53,7 @@ $$
 \end{equation}
 $$
 
-When we use `lmer` to estimate the model, we only give it one equation. So what we need to do is substitute the equations for $\beta_{0j}$ and $\beta_{1j}$ in to get everything in term of the $\gamma$ parameters (notice that our "$\text{time}_{ij}$" variable gets multiplied through the equation for $\beta_{1j}$ and creates the interaction term $\text{SES}_{j}\times \text{time}$):
+When we use `lmer` to estimate the model, we only give it one equation. So what we need to do is substitute the equations for $\beta_{0j}$ and $\beta_{1j}$ in to get everything in term of the $\gamma$ parameters (notice that our $\text{time}\_{ij}$ variable gets multiplied through the equation for $\beta_{1j}$ and creates the interaction term $\text{SES}_{j}\times \text{time}$):
 
 $$
 \begin{equation} 
@@ -73,3 +83,17 @@ summary(aModel)
 It doesn't really matter that you have two days of data per person, because we just care about the time of day. You could potentially add another grouping by day, but it might make things more complicated than necessary.
 
 When you get output from `summary`, you'll look at the term `SES:time` to see if a subject's SES predicts their cortisol slope. This is because in equation \\ref{corteqfull}, $\gamma_{11}$ is the parameter for SES predicting $\beta_{1j}$, which is your cortisol slope parameter. This parameter sticks around in the final equation \\ref{corteqsingle} for the interaction term.
+
+
+```{r eval=T}
+library(lme4)
+library(ggplot2)
+data("sleepstudy")
+ggplot(sleepstudy, aes(x=Days, y=Reaction, group=Subject, color=Subject))+
+	geom_point()+
+	geom_line(stat='smooth', method='lm')
+summary(fm1 <- lmer(Reaction ~ Days + (Days|Subject), sleepstudy))
+summary(fm2 <- lmer(Reaction ~ Days + (1|Subject) + (0+Days|Subject), sleepstudy))
+anova(fm1, fm2)
+plot(fm1, type = c("p", "smooth"))
+```
