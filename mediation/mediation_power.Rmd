@@ -4,6 +4,8 @@ title: 'Power to detect mediation and other problems'
 date: 2016-09-02 
 ---
 
+[fork this on gitlab](https://gitlab.com/jflournoy/misc-r-projects/tree/master/mediation)
+
 I was reminded of this old R Club post recently by [Rose](https://twitter.com/roseberrymaier), and decided to flesh it out a bit. The first part is about power to detect mediation in the standard 3 variable model people use. The second part examines how model misspecification gives rise to significant statistical tests of mediation when there is actually no mediation going on. Since publishing a paper (in press now, but written in ~2013) in which longitudinal data was subjected to a test of mediation, I've become increasingly skeptical of these kinds of analyses (including my own).
 
 <!--more-->
