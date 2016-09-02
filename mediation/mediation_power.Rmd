@@ -75,7 +75,7 @@ total := c + (a*b)
 	})
 ```
 
-![](mediation_fig.png)
+![](../figs/mediation/mediation_fig.png)
 
 
 The `testModel` above is the model we'll estimate. Notice that it's equivalent in structure to that which is generating the data. We're not worrying about model misspecification at this point.
