@@ -12,7 +12,7 @@ One of my favorite functions in R is `predict`, and so in response to this recen
 
 Let's assume a simple interaction effect between two continuous variables:
 
-$$y = \beta_{0} + \beta_{1}x_{1} + \beta_{2}x{2} + \beta_{3}x_{1}x_{2}+\epsilon$$
+$$y = \beta_{0} + \beta_{1}x_{1} + \beta_{2}x_{2} + \beta_{3}x_{1}x_{2}+\epsilon$$
 
 ```{r}
 set.seed(92299)
