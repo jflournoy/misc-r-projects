@@ -4,7 +4,7 @@ title: 'Plotting using `predict`'
 date: 2016-09-12 
 ---
 
-[fork this on gitlab](https://gitlab.com/jflournoy/misc-r-projects/tree/master/plot_using_prediction)
+[fork this on gitlab](https://gitlab.com/jflournoy/misc-r-projects/tree/master/plot_using_predict)
 
 Let's assume a simple interaction effect between two continuous variables:
 
