@@ -6,6 +6,10 @@ date: 2016-09-12
 
 [fork this on gitlab](https://gitlab.com/jflournoy/misc-r-projects/tree/master/plot_using_predict)
 
+One of my favorite functions in R is `predict`, and so in response to this recent question on SlackRs#plots ("Anyone know how to plot an interaction at a moderators mean, +1SD, and -1SD?") I thought I'd write up a quick demo of it's usefulness.
+
+<!--more-->
+
 Let's assume a simple interaction effect between two continuous variables:
 
 $$y = \beta_{0} + \beta_{1}x_{1} + \beta_{2}x{2} + \beta_{3}x_{1}x_{2}+\epsilon$$
