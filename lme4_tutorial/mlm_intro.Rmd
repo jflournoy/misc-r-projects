@@ -1,7 +1,7 @@
 ---
 layout: post
 title: "Brief MLM tutorial"
-date: 2016-08-25 15:30:00 -0700
+date: 2016-09-20 15:30:00 -0700
 categories: R tutorials
 ---
 
@@ -20,6 +20,8 @@ MathJax.Hub.Config({
   }
 });
 </script>
+
+**Updated: [plotting estimates](#plotting-model-estimates) from real data using `predict`.**
 
 This is a brief description of how to think about multi-level models, especially the link between the formal expression of these models and how that looks in `lme4`. The data set consists of 4 observations per day over 2 days of cortisol in a developmental sample. The relevant theoretical questions are: what individual-level predictors are related to cortisol intercepts and slopes.
 
@@ -85,15 +87,107 @@ It doesn't really matter that you have two days of data per person, because we j
 When you get output from `summary`, you'll look at the term `SES:time` to see if a subject's SES predicts their cortisol slope. This is because in equation \\ref{corteqfull}, $\gamma_{11}$ is the parameter for SES predicting $\beta_{1j}$, which is your cortisol slope parameter. This parameter sticks around in the final equation \\ref{corteqsingle} for the interaction term.
 
 
-```{r eval=T}
-library(lme4)
-library(ggplot2)
-data("sleepstudy")
-ggplot(sleepstudy, aes(x=Days, y=Reaction, group=Subject, color=Subject))+
-	geom_point()+
-	geom_line(stat='smooth', method='lm')
-summary(fm1 <- lmer(Reaction ~ Days + (Days|Subject), sleepstudy))
-summary(fm2 <- lmer(Reaction ~ Days + (1|Subject) + (0+Days|Subject), sleepstudy))
-anova(fm1, fm2)
-plot(fm1, type = c("p", "smooth"))
+## Plotting model estimates
+
+Let's consider a model and some real data: 
+
+```r
+lmer(cort ~ 1 + time*ageyrs*SUBTYPE + gender  +steroid + meds +
+            (1 | IDENT_SUBID/index4),
+     data=aDF)
 ```
+
+which expands to (grouping terms by the observation-level parameter they seek to explain):
+
+```r
+lmer(cort ~ 1 + ageyrs + SUBTYPE + ageyrs:SUBTYPE + gender + steroid + meds +
+            time + time:ageyrs + time:SUBTYPE + time:ageyrs:SUBTYPE +
+            (1 | IDENT_SUBID/index4),
+     data=aDF)
+```
+
+```{r}
+aDF <- read.csv('./cort_mini.csv')
+head(aDF)
+```
+
+We have cortisol measured at 4 different times per day (`index4`), over two days, nested within subjects. As I understand it, grouping by measurement within subject helps account for the possibility that some subjects wake up later than others, and so the intercept of the cortisol measurements for each timepoint may deviate from the expected value. 
+
+We have an observation-level variables: _time_; and several subject-level variables: _ageyrs_, _subtype_, _gender_, _steroid_, and _meds_. I think that this `lmer` call implies the following equations (but I don't often work with this kind of nesting), where _i_ is the observation index, _j_ is the measurement-within-subject index (`IDENT_SUBID:index4`), and _k_ is the subject index (`IDENT_SUBID`):
+
+$$
+\begin{equation} 
+\begin{split}
+\text{cort}_{ij} = &\beta_{0jk}+\beta_{1jk} \cdot \text{time}_{ij}+\epsilon_{ijk}\\
+\beta_{0jk} = &\gamma_{00k}+u_{0jk}\\
+\beta_{1jk} = &\gamma_{10k}\\
+\gamma_{00k} = &\delta_{000}+\delta_{001} \cdot \text{ageyrs}+\delta_{002} \cdot \text{SUBTYPE}+\delta_{003} \cdot \text{ageyrs:SUBTYPE}+\\
+ & \delta_{004} \cdot \text{gender}+\delta_{005} \cdot \text{steroid}+\delta_{006} \cdot \text{meds}+v_{00k}\\
+\gamma_{10k} = &\delta_{100}+\delta_{101} \cdot \text{ageyrs}+\delta_{102} \cdot \text{SUBTYPE}+\delta_{103} \cdot \text{ageyrs:SUBTYPE}\\
+\end{split}
+\label{realcorteq}
+\end{equation}
+$$
+
+We'll estimate the paramters for this model using the restricted data set in `aDF` (this is not public data, so we just have a subset of participants).
+
+```{r}
+library(lme4)
+aMod <- lmer(cort ~ 1 + ageyrs + SUBTYPE + ageyrs:SUBTYPE + gender + steroid + meds +
+            time + time:ageyrs + time:SUBTYPE + time:ageyrs:SUBTYPE +
+            (1 | IDENT_SUBID/index4),
+     data=aDF)
+summary(aMod)
+```
+
+The model object in `aMod` contains enought information that we can create a new data set and use `predict` to get expected values for plotting the interactions we're interested in. We'd like to plot the cortisol slope (x = time, y = cort) for different ages (grouping lines by integer ages, say), and we probably want a different plot for each subtype. We also need a value for every term in the model, so let's get the mean for our "control" variables: 
+
+```{r}
+mean_gender = .5 #gender is coded 1 and 0
+mean_steroid = .5 #steroid is coded 1 and 0
+mean_meds = .5 #ditto
+```
+
+We now want to get all combinations of age (say, every second integer between 4 and 18), subtype (0 and 1), and continuous time (5am - 11pm). We can use `expand.grid` to do this handily:
+
+```{r}
+predData <- data.frame(expand.grid(ageyrs = seq(4, 18, 2),
+                                   SUBTYPE = c(0, 1),
+                                   time = seq(5.0, 23.0, .5),
+                                   gender = mean_gender,
+                                   steroid = mean_steroid,
+                                   meds = mean_meds))
+head(predData)
+```
+
+Now we can call `predict` to get values for `cort` (read `?predict.merMod` for more info). We'll set `re.form = NA` so that it only estimates the fixed effects. We could get expected values of cort for each of our participants, which is fun, but I'll save that for later. 
+
+```{r}
+predData$cort <- predict(object=aMod, newdata=predData, re.form=NA)
+head(predData)
+```
+
+Now, to plot it using ggplot in the form I hinted at above:
+
+```{r fig.width=6, fig.height=4}
+library(ggplot2)
+ggplot(predData, aes(x=time, y=cort, group=ageyrs, color=ageyrs))+
+       geom_line()+
+       facet_wrap(~SUBTYPE)
+```   
+
+In the plot above you see an interaction with age for SUBTYPE 1, only. There are some other ways to play with this plot, like faceting by age, or letting the color be dictated by an interaction between the two:
+
+
+```{r fig.width=6, fig.height=8}
+library(ggplot2)
+ggplot(predData, aes(x=time, y=cort, group=factor(SUBTYPE), color=factor(SUBTYPE)))+
+       geom_line()+
+       facet_wrap(~ageyrs)
+```   
+
+```{r fig.width=6, fig.height=8}
+library(ggplot2)
+ggplot(predData, aes(x=time, y=cort, group=interaction(ageyrs, SUBTYPE), color=interaction(ageyrs, SUBTYPE)))+
+       geom_line()
+```   
