@@ -224,7 +224,8 @@ div.tocify {
 <h1>Using individual contrasts estimates</h1>
 <div id="load-the-data" class="section level2">
 <h2>Load the data</h2>
-<pre class="r"><code>library(tidyverse)</code></pre>
+<pre class="r"><code># pdf(file = NULL)
+library(tidyverse)</code></pre>
 <pre><code>## Loading tidyverse: ggplot2
 ## Loading tidyverse: tibble
 ## Loading tidyverse: tidyr
@@ -234,7 +235,8 @@ div.tocify {
 <pre><code>## Conflicts with tidy packages ----------------------------------------------</code></pre>
 <pre><code>## filter(): dplyr, stats
 ## lag():    dplyr, stats</code></pre>
-<pre class="r"><code>social.roi &lt;- c(174, 18, 50, 119, 12, 171, 70, 144, 150, 156, 105, 102, 113, 55, 92, 137, 168, 122, 125, 62, 47, 190, 77, 155, 163, 25, 130)
+<pre class="r"><code>data_dir &lt;- &#39;/data/jflournoy/SFIC_Self3/soc_acad/&#39;
+social.roi &lt;- c(174, 18, 50, 119, 12, 171, 70, 144, 150, 156, 105, 102, 113, 55, 92, 137, 168, 122, 125, 62, 47, 190, 77, 155, 163, 25, 130)
 self.roi &lt;- c(130, 156, 174, 18, 25, 37, 50, 55, 150, 156, 105)
 
 parcel_label &lt;- data_frame(parcellation = c(social.roi, self.roi),
@@ -242,11 +244,11 @@ parcel_label &lt;- data_frame(parcellation = c(social.roi, self.roi),
                                      rep(&#39;self&#39;, length(self.roi)))) %&gt;%
   filter(label == &#39;social&#39;)
 
-covariates &lt;- read.csv(&#39;/data/jflournoy/SFIC_Self3/soc_acad/SFIC_age.pds.gender.csv&#39;) %&gt;%
+covariates &lt;- read.csv(file.path(data_dir, &#39;SFIC_age.pds.gender.csv&#39;)) %&gt;%
   mutate(SID = sprintf(&quot;s%03d&quot;, SID)) %&gt;%
   rename(&quot;subjectID&quot; = SID)
 
-fxParcelDF &lt;- read_csv(&#39;/data/jflournoy/SFIC_Self3/soc_acad/fxParcellations.csv&#39;) %&gt;%
+fxParcelDF &lt;- read_csv(file.path(data_dir, &#39;fxParcellations.csv&#39;)) %&gt;%
   left_join(parcel_label) %&gt;%
   mutate(label = ifelse(is.na(label), &#39;other&#39;, label)) %&gt;%
   mutate(wavenum = c(`10` = 1, `13` = 2, `16` = 3)[as.character(age)]) %&gt;%
@@ -372,7 +374,7 @@ numRx &lt;- sum(as.numeric(lapply(aformula$reTrms$cnms, function(x) {
 
 maxfun &lt;- 10*(numFx+numRx+1)^2
 
-saveModelFile &lt;- &#39;/data/jflournoy/SFIC_Self3/soc_acad/full_mlm.RDS&#39;
+saveModelFile &lt;- file.path(data_dir, &#39;full_mlm.RDS&#39;)
 if(file.exists(saveModelFile)){
   fullModel &lt;- readRDS(saveModelFile)
 } else {
@@ -488,51 +490,239 @@ round((fixef(fullModel) - fixef(simpleMod))/fixef(simpleMod),2)</code></pre>
 ##      age_c:labelsocial:domainsocial     labelsocial:age_c2:domainsocial 
 ##                                0.00                                0.00</code></pre>
 <pre class="r"><code>#but much better fit, and we sort of want to be able to estimate each parcel&#39;s effect.
-anova(fullModel, simpleMod, refit = F)[,-1]</code></pre>
+anova(fullModel, simpleMod, refit = F)[,-1] #refit = F because it&#39;s the random effects that are different</code></pre>
 <pre><code>##              AIC    BIC logLik deviance  Chisq Chi Df Pr(&gt;Chisq)    
 ## simpleMod 115135 115359 -57544   115089                             
 ## fullModel 111974 112821 -55900   111800 3288.9     64  &lt; 2.2e-16 ***
 ## ---
 ## Signif. codes:  0 &#39;***&#39; 0.001 &#39;**&#39; 0.01 &#39;*&#39; 0.05 &#39;.&#39; 0.1 &#39; &#39; 1</code></pre>
+<p>There is the possibility that not including the 4-way interaction between <span class="math inline">\(\text{AGE}\)</span> (or <span class="math inline">\(\text{AGE}^2\)</span>) and <span class="math inline">\(\text{LABEL}\)</span>, <span class="math inline">\(\text{TARGET}\)</span>, and <span class="math inline">\(\text{DOMAIN}\)</span>is not a good idea. That’s a hell of an interaction to interpret, but it’s the final piece that allows all of our estimates to be unconstrained (I think). That is, we can get a fixed effect estimate of age for every cell of the design, for each of the two brain region types. For now, like before, we’ll not include randome effect of parcel (or subject) for this term, though in reality it’s probably reasonable to expect that each parcel might show a different effect like this. That full model will be</p>
+<p><span class="math display">\[
+\begin{eqnarray}
+\text{FX_BETA}_{ijk} &amp;=&amp; \beta_{0jk} + \beta_{1jk} \text{AGE}_{i} + \beta_{20k} \text{AGE}^2_{i} + \\
+&amp;&amp;\beta_{30k}\text{TARGET}_{i} + \beta_{40k}\text{DOMAIN}_{i} + \beta_{500}\text{TARGET}_{i}\text{DOMAIN}_{i} +\\
+&amp;&amp;\text{AGE}_{i}(\beta_{6jk}\text{TARGET}_{i} + \beta_{7jk}\text{DOMAIN}_{i}) + \\
+&amp;&amp;\text{AGE}_{i}^2(\beta_{80k}\text{TARGET}_{i} + \beta_{90k}\text{DOMAIN}_{i}) + \\
+&amp;&amp;\text{AGE}_{i}(\beta_{10jk}\text{TARGET}_{i}\text{DOMAIN}_{i}) + \\
+&amp;&amp;\text{AGE}_{i}^2(\beta_{110k}\text{TARGET}_{i}\text{DOMAIN}_{i}) + \\
+&amp;&amp;\epsilon_{ijk} \\
+\beta_{0jk} &amp;=&amp; \gamma_{000} + \gamma_{001}\text{LABEL}_{k} + \eta_{0j0} + \eta_{00k}\\
+\beta_{1jk} &amp;=&amp; \gamma_{100} + \gamma_{101}\text{LABEL}_{k} + \eta_{1j0} + \eta_{10k}\\
+\beta_{20k} &amp;=&amp; \gamma_{20} + \gamma_{201}\text{LABEL}_{k} + \eta_{20k} \\
+\beta_{30k} &amp;=&amp; \gamma_{300} + \gamma_{301}\text{LABEL}_{k} + \eta_{30k} \\
+\beta_{40k} &amp;=&amp; \gamma_{400} + \gamma_{401}\text{LABEL}_{k} + \eta_{40k}\\
+\beta_{500} &amp;=&amp; \gamma_{500} + \gamma_{501}\text{LABEL}_{k} \\
+\beta_{6jk} &amp;=&amp; \gamma_{600} + \gamma_{601}\text{LABEL}_{k} + \eta_{6j0} + \eta_{60k} \\
+\beta_{7jk} &amp;=&amp; \gamma_{700} + \gamma_{701}\text{LABEL}_{k} + \eta_{7j0} + \eta_{70k} \\
+\beta_{80k} &amp;=&amp; \gamma_{800} + \gamma_{801}\text{LABEL}_{k} + \eta_{80k} \\
+\beta_{90k} &amp;=&amp; \gamma_{900} + \gamma_{901}\text{LABEL}_{k} + \eta_{90k} \\
+\beta_{10jk} &amp;=&amp; \gamma_{1000} + \gamma_{1001}\text{LABEL}_{k} \\
+\beta_{110k} &amp;=&amp; \gamma_{1100} + \gamma_{1101}\text{LABEL}_{k} 
+\end{eqnarray}
+\]</span></p>
+<pre class="r"><code>max_fx_model_equation &lt;- formula(beta ~ 1 + age_c*label + age_c2*label + target*domain*label + 
+  age_c*target*label + age_c2*target*label+
+  age_c*domain*label + age_c2*domain*label +
+  age_c*target*domain*label + age_c2*target*domain*label + 
+  (1 + age_c*target + age_c*domain | subjectID) + 
+  (1 + age_c + age_c2 +  
+  age_c*target + age_c2*target +
+  age_c*domain + age_c2*domain | parcellation))
+
+max_aformula &lt;- lFormula(max_fx_model_equation, data = fxParcelDF.agec)
+
+max_numFx &lt;- length(dimnames(max_aformula$X)[[2]])
+
+max_numRx &lt;- sum(as.numeric(lapply(max_aformula$reTrms$cnms, function(x) {
+  l &lt;- length(x)
+  (l*(l-1))/2+l
+  })))
+
+max_maxfun &lt;- 10*(max_numFx+max_numRx+1)^2
+
+max_saveModelFile &lt;- file.path(data_dir, &#39;max_full_mlm.RDS&#39;)
+if(file.exists(max_saveModelFile)){
+  max_fullModel &lt;- readRDS(max_saveModelFile)
+} else {
+  max_fullModel &lt;- lmer(max_fx_model_equation, data = fxParcelDF.agec, REML=F, #Use ML since we want to compare fixed effects
+            verbose = 2,
+                control=lmerControl(optCtrl=list(maxfun=maxfun), optimizer = &quot;nloptwrap&quot;, calc.derivs = FALSE))
+  saveRDS(max_fullModel, max_saveModelFile)  
+}
+
+summary(max_fullModel)</code></pre>
+<pre><code>## Linear mixed model fit by maximum likelihood  [&#39;lmerMod&#39;]
+## Formula: beta ~ 1 + age_c * label + age_c2 * label + target * domain *  
+##     label + age_c * target * label + age_c2 * target * label +  
+##     age_c * domain * label + age_c2 * domain * label + age_c *  
+##     target * domain * label + age_c2 * target * domain * label +  
+##     (1 + age_c * target + age_c * domain | subjectID) + (1 +  
+##     age_c + age_c2 + age_c * target + age_c2 * target + age_c *  
+##     domain + age_c2 * domain | parcellation)
+##    Data: fxParcelDF.agec
+## Control: 
+## lmerControl(optCtrl = list(maxfun = maxfun), optimizer = &quot;nloptwrap&quot;,  
+##     calc.derivs = FALSE)
+## 
+##      AIC      BIC   logLik deviance df.resid 
+## 111707.0 112593.5 -55762.5 111525.0   125621 
+## 
+## Scaled residuals: 
+##      Min       1Q   Median       3Q      Max 
+## -14.2565  -0.4752  -0.0078   0.4556  22.7516 
+## 
+## Random effects:
+##  Groups       Name                Variance  Std.Dev. Corr             
+##  parcellation (Intercept)         3.818e-02 0.195394                  
+##               age_c               1.104e-04 0.010505  0.59            
+##               age_c2              2.826e-06 0.001681 -0.73 -0.98      
+##               targetself          1.074e-03 0.032767 -0.13 -0.14  0.15
+##               domainsocial        1.314e-03 0.036250  0.28  0.55 -0.53
+##               age_c:targetself    4.005e-06 0.002001 -0.14  0.29 -0.21
+##               age_c2:targetself   1.721e-06 0.001312  0.50  0.45 -0.50
+##               age_c:domainsocial  1.441e-05 0.003796  0.65  0.20 -0.32
+##               age_c2:domainsocial 2.200e-06 0.001483 -0.44 -0.63  0.64
+##  subjectID    (Intercept)         3.918e-04 0.019793                  
+##               age_c               2.965e-04 0.017221  0.05            
+##               targetself          3.473e-03 0.058931  0.02  0.76      
+##               domainsocial        1.956e-03 0.044221 -0.14 -0.76 -0.90
+##               age_c:targetself    5.931e-04 0.024354  0.00 -0.84 -0.97
+##               age_c:domainsocial  2.108e-04 0.014520 -0.22  0.57  0.92
+##  Residual                         1.398e-01 0.373917                  
+##                               
+##                               
+##                               
+##                               
+##                               
+##   0.08                        
+##  -0.22 -0.55                  
+##  -0.90 -0.03  0.33            
+##  -0.51 -0.47  0.39  0.74      
+##   0.49 -0.82  0.33 -0.53  0.02
+##                               
+##                               
+##                               
+##                               
+##   0.90                        
+##  -0.81 -0.89                  
+##                               
+## Number of obs: 125712, groups:  parcellation, 194; subjectID, 81
+## 
+## Fixed effects:
+##                                              Estimate Std. Error t value
+## (Intercept)                                 0.0253430  0.0158616   1.598
+## age_c                                       0.0027382  0.0023675   1.157
+## labelsocial                                 0.0620623  0.0418866   1.482
+## age_c2                                      0.0010261  0.0005405   1.898
+## targetself                                  0.0026600  0.0090690   0.293
+## domainsocial                               -0.0055255  0.0081079  -0.681
+## age_c:labelsocial                          -0.0010097  0.0032862  -0.307
+## labelsocial:age_c2                         -0.0030089  0.0013232  -2.274
+## targetself:domainsocial                     0.0061548  0.0078904   0.780
+## labelsocial:targetself                      0.0127706  0.0164275   0.777
+## labelsocial:domainsocial                    0.0635209  0.0167394   3.795
+## age_c:targetself                           -0.0020093  0.0030272  -0.664
+## age_c2:targetself                          -0.0004797  0.0007123  -0.673
+## age_c:domainsocial                         -0.0001551  0.0021573  -0.072
+## age_c2:domainsocial                        -0.0007902  0.0007133  -1.108
+## labelsocial:targetself:domainsocial         0.0141078  0.0211504   0.667
+## age_c:labelsocial:targetself                0.0130822  0.0035034   3.734
+## labelsocial:age_c2:targetself              -0.0012131  0.0018256  -0.664
+## age_c:labelsocial:domainsocial              0.0072835  0.0035667   2.042
+## labelsocial:age_c2:domainsocial            -0.0019975  0.0018312  -1.091
+## age_c:targetself:domainsocial               0.0004418  0.0018353   0.241
+## age_c2:targetself:domainsocial             -0.0004480  0.0009524  -0.470
+## age_c:labelsocial:targetself:domainsocial  -0.0168898  0.0049196  -3.433
+## labelsocial:age_c2:targetself:domainsocial  0.0039577  0.0025529   1.550</code></pre>
+<pre><code>## 
+## Correlation matrix not shown by default, as p = 24 &gt; 12.
+## Use print(x, correlation=TRUE)  or
+##   vcov(x)     if you need it</code></pre>
+<pre class="r"><code>#to compare to the full model we need to refit it using ML
+
+saveModelFileML &lt;- file.path(data_dir, &#39;full_mlm_ml.RDS&#39;)
+if(file.exists(saveModelFileML)){
+  fullModelML &lt;- readRDS(saveModelFileML)
+} else {
+  fullModelML &lt;- refitML(fullModel, optimizer = &#39;nloptwrap&#39;)
+      saveRDS(fullModelML, saveModelFileML)  
+}
+
+anova(fullModelML, max_fullModel, refit = F)[,-1]</code></pre>
+<pre><code>##                  AIC    BIC logLik deviance  Chisq Chi Df Pr(&gt;Chisq)    
+## fullModelML   111772 112620 -55799   111598                             
+## max_fullModel 111707 112593 -55762   111525 73.375      4  4.395e-15 ***
+## ---
+## Signif. codes:  0 &#39;***&#39; 0.001 &#39;**&#39; 0.01 &#39;*&#39; 0.05 &#39;.&#39; 0.1 &#39; &#39; 1</code></pre>
 </div>
 <div id="plot-expectations" class="section level2">
 <h2>Plot expectations</h2>
-<pre class="r"><code>REFormString &lt;- as.character(findbars(fullModel@call$formula)[[2]])
+<p>I’ll use the model with an effect of age on the the interaction term, that is also free to differ by label. I do not, however, let the effect that includes the interaction term between the two factors vary across subjects or parcels.</p>
+<div id="rawest" class="section level3">
+<h3>Rawest</h3>
+<pre class="r"><code>library(wesanderson)
+
+color_palette &lt;- wes_palette(name = &#39;Moonrise2&#39;, n = 4)
+
+parcel_labeller &lt;- function(variable,value){
+  if(variable == &#39;label&#39;){
+    parcel_type_names &lt;- list(
+      &#39;social&#39;=&quot;Social parcels&quot;,
+      &#39;other&#39;=&quot;Non-social parcels&quot;)
+    return(parcel_type_names[value])
+  } else {
+    return(value)
+  }
+}
+
+model_to_plot &lt;- max_fullModel
+
+REFormString &lt;- as.character(findbars(model_to_plot@call$formula)[[2]])
 
 reForm &lt;- as.formula(paste0(&#39;~(&#39;, REFormString[[2]], REFormString[[1]], REFormString[[3]], &#39;)&#39;))
 
-fxParcelDF.agec$expected &lt;- predict(fullModel, newdata = fxParcelDF.agec,
+fxParcelDF.agec$expected &lt;- predict(model_to_plot, newdata = fxParcelDF.agec,
                                     re.form=reForm)
 
-fxParcelDF.agec$expected_mean &lt;- predict(fullModel, newdata = fxParcelDF.agec,
+fxParcelDF.agec$expected_mean &lt;- predict(model_to_plot, newdata = fxParcelDF.agec,
                                     re.form=NA)
 
-fxParcelDF.agec %&gt;%
+rawExPlot &lt;- fxParcelDF.agec %&gt;%
   distinct(parcellation, target, domain, age, label, .keep_all = T) %&gt;% # left_join(parcelCM) %&gt;%
   ggplot(aes(x = age, y = expected, group = parcellation)) + 
-  geom_point(aes(y = beta), alpha = .075, size = .5) + 
-  geom_line(aes(y = beta, group = interaction(subjectID, parcellation)), alpha = .01, size = .5) + 
-  geom_line(alpha = .4) +
-  geom_line(aes(y = expected_mean), color = &#39;blue&#39;, 
+  geom_point(aes(y = beta), alpha = .15, size = .5, color = color_palette[1]) + 
+  geom_line(aes(y = beta, group = interaction(subjectID, parcellation)), alpha = .04, size = .5, color = color_palette[1]) + 
+  geom_line(alpha = .4, color = color_palette[4]) +
+  geom_line(aes(y = expected_mean), color = color_palette[2], 
             data = distinct(fxParcelDF.agec,
                             parcellation, target, domain, age, expected_mean, label, .keep_all = T),
             size = 1) + 
   coord_cartesian(y = c(-1, 1)) + 
-  facet_grid(target+domain~label) + 
+  facet_grid(target+domain~label, labeller = parcel_labeller) + 
   theme(panel.background = element_rect(fill = &#39;white&#39;))</code></pre>
-<p><img src="soc_acad_parcels_files/figure-html/unnamed-chunk-4-1.png" width="1152" /></p>
+<pre><code>## Warning: The labeller API has been updated. Labellers taking `variable`and
+## `value` arguments are now deprecated. See labellers documentation.</code></pre>
+<pre class="r"><code>print(rawExPlot)</code></pre>
+<p><img src="soc_acad_parcels_files/figure-html/unnamed-chunk-5-1.png" width="960" /></p>
 </div>
-<div id="average-effects" class="section level2">
-<h2>Average effects</h2>
-<pre class="r"><code>distinct(fxParcelDF.agec,
+<div id="average-effects" class="section level3">
+<h3>Average effects</h3>
+<pre class="r"><code>avgFxPlot &lt;- distinct(fxParcelDF.agec,
          parcellation, target, domain, age, expected_mean, label, .keep_all = T) %&gt;%
-  ggplot(aes(x = age, y = expected_mean, group = interaction(target, domain), color = interaction(target, domain))) +
+  ggplot(aes(x = age, y = expected_mean, group = interaction(target, domain), 
+             color = target,
+             linetype = domain)) +
   geom_point(size = .5) + 
   geom_line(size = .5, stat = &#39;smooth&#39;, method = &#39;lm&#39;, formula = y ~ poly(x,2)) + 
   # coord_cartesian(y = c(-1, 1)) + 
-  facet_grid(label~.) + 
+  scale_color_manual(breaks = c(&#39;self&#39;, &#39;other&#39;), values = c(self=color_palette[2], other=color_palette[1]))+
+  facet_grid(label~., labeller = parcel_labeller) + 
   theme(panel.background = element_rect(fill = &#39;white&#39;))</code></pre>
-<p><img src="soc_acad_parcels_files/figure-html/unnamed-chunk-5-1.png" width="672" /></p>
+<pre><code>## Warning: The labeller API has been updated. Labellers taking `variable`and
+## `value` arguments are now deprecated. See labellers documentation.</code></pre>
+<pre class="r"><code>print(avgFxPlot)</code></pre>
+<p><img src="soc_acad_parcels_files/figure-html/unnamed-chunk-6-1.png" width="672" /></p>
+</div>
 <div id="contrasted" class="section level3">
 <h3>Contrasted</h3>
 <pre class="r"><code>fullModFXDF &lt;- with(fxParcelDF.agec, 
@@ -542,22 +732,26 @@ fxParcelDF.agec %&gt;%
                                 age = seq(min(age), max(age), .25))) %&gt;%
   mutate(age_c = age - 13, age_c2 = age_c^2)
 
-fullModFXDF$expected &lt;- predict(fullModel, newdata = fullModFXDF, re.form = NA)
+fullModFXDF$expected &lt;- predict(model_to_plot, newdata = fullModFXDF, re.form = NA)
 
 fullModFXDF_w &lt;- fullModFXDF %&gt;%
   spread(domain, expected) %&gt;%
   mutate(`social - academic` = social - academic)
 
-fullModFXDF_w %&gt;%
+contrastedPlot &lt;- fullModFXDF_w %&gt;%
   ggplot(aes(x = age, y = `social - academic`, group = target, color = target))+
   geom_line()+
-  facet_wrap(~label, nrow=1)+
+  facet_wrap(~label, nrow=1, labeller = parcel_labeller)+
+  scale_color_manual(breaks = c(&#39;self&#39;, &#39;other&#39;), values = c(self=color_palette[2], other=color_palette[1]))+
   theme(panel.background = element_rect(fill = &#39;white&#39;))</code></pre>
-<p><img src="soc_acad_parcels_files/figure-html/unnamed-chunk-6-1.png" width="480" /></p>
+<pre><code>## Warning: The labeller API has been updated. Labellers taking `variable`and
+## `value` arguments are now deprecated. See labellers documentation.</code></pre>
+<pre class="r"><code>print(contrastedPlot)</code></pre>
+<p><img src="soc_acad_parcels_files/figure-html/unnamed-chunk-7-1.png" width="480" /></p>
 </div>
 <div id="contrasty-random-effects" class="section level3">
 <h3>Contrasty Random Effects</h3>
-<pre class="r"><code>REFormString &lt;- as.character(findbars(fullModel@call$formula)[[2]])
+<pre class="r"><code>REFormString &lt;- as.character(findbars(model_to_plot@call$formula)[[2]])
 
 reForm &lt;- as.formula(paste0(&#39;~(&#39;, REFormString[[2]], REFormString[[1]], REFormString[[3]], &#39;)&#39;))
 
@@ -570,10 +764,10 @@ fullModRXDF &lt;- with(fxParcelDF.agec,
                                 stringsAsFactors = F)) %&gt;%
   mutate(age_c = age - 13, age_c2 = age_c^2, subjectID = NA)
 
-fullModRXDF$exp &lt;- predict(fullModel, newdata = fullModRXDF,
+fullModRXDF$exp &lt;- predict(model_to_plot, newdata = fullModRXDF,
                                 re.form=reForm)
 
-fullModRXDF$exp_m &lt;- predict(fullModel, newdata = fullModRXDF,
+fullModRXDF$exp_m &lt;- predict(model_to_plot, newdata = fullModRXDF,
                                      re.form=~0)
 
 fullModFXDF_w &lt;- fullModRXDF %&gt;%
@@ -583,15 +777,47 @@ fullModFXDF_w &lt;- fullModRXDF %&gt;%
   mutate(`exp social - academic` = social_exp - academic_exp,
          `exp_m social - academic` = social_exp_m - academic_exp_m)
 
-fullModFXDF_w %&gt;%
+contrastyFxPlot &lt;- fullModFXDF_w %&gt;%
   ggplot(aes(x = age, y = `exp social - academic`, color = target))+
   geom_line(aes(group = interaction(parcellation, target)), alpha = .1)+
   geom_line(aes(y = `exp_m social - academic`, group = target), 
             alpha = 1, size = 2)+
-  facet_wrap(~label, nrow=1)+
+  facet_wrap(~label, nrow=1, labeller = parcel_labeller)+
+  scale_color_manual(breaks = c(&#39;self&#39;, &#39;other&#39;), values = c(self=color_palette[2], other=color_palette[1]))+
   theme(panel.background = element_rect(fill = &#39;white&#39;))+
   labs(x = &#39;Age&#39;, y = &#39;Expected value of social - academic contrast\nper parcel, and on average&#39;)</code></pre>
-<p><img src="soc_acad_parcels_files/figure-html/unnamed-chunk-7-1.png" width="672" /></p>
+<pre><code>## Warning: The labeller API has been updated. Labellers taking `variable`and
+## `value` arguments are now deprecated. See labellers documentation.</code></pre>
+<pre class="r"><code>print(contrastyFxPlot)</code></pre>
+<p><img src="soc_acad_parcels_files/figure-html/unnamed-chunk-8-1.png" width="672" /></p>
+</div>
+<div id="extra-contrasty-random-effects" class="section level3">
+<h3>Extra Contrasty Random Effects</h3>
+<pre class="r"><code>fullModFXDF_ww &lt;- fullModFXDF_w %&gt;% ungroup %&gt;%
+  dplyr::select(-contains(&#39;social_exp&#39;), -contains(&#39;academic_exp&#39;)) %&gt;%
+  gather(key, value, `exp social - academic`, `exp_m social - academic`) %&gt;%
+  unite(target_est, target, key) %&gt;%
+  spread(target_est, value) %&gt;%
+  rename(e_s_s_a = `self_exp social - academic`,
+         e_o_s_a = `other_exp social - academic`,
+         e_m_s_s_a = `self_exp_m social - academic`,
+         e_m_o_s_a = `other_exp_m social - academic`)%&gt;%
+  mutate(`e_soc-acad_self-other` = e_s_s_a - e_o_s_a,
+         `e_m_soc-acad_self-other` = e_m_s_s_a - e_m_o_s_a)
+
+extraMoreContrastyPlot &lt;- fullModFXDF_ww %&gt;%
+  ggplot(aes(x = age, y = `e_soc-acad_self-other`, color = label))+
+  # geom_line(aes(group = interaction(parcellation, label)), alpha = .1)+
+  geom_line(aes(y = `e_m_soc-acad_self-other`, group = label), 
+            alpha = 1, size = 2)+
+  # facet_wrap(~label, nrow=1)+
+  scale_color_manual(breaks = c(&#39;social&#39;, &#39;other&#39;), labels = c(&#39;Social&#39;, &#39;Non-social&#39;),
+                     values = c(social=color_palette[3], other=color_palette[4]))+
+  theme(panel.background = element_rect(fill = &#39;white&#39;))+
+  labs(x = &#39;Age&#39;, y = &#39;Expected value of \nself(social - academic) - other(social - academic) contrast\nper parcel, and on average&#39;,
+       color = &#39;Parcel&#39;)
+print(extraMoreContrastyPlot)</code></pre>
+<p><img src="soc_acad_parcels_files/figure-html/unnamed-chunk-9-1.png" width="672" /></p>
 </div>
 </div>
 </div>
@@ -599,7 +825,7 @@ fullModFXDF_w %&gt;%
 <h1>Using the estimates from the whole-brain model</h1>
 <div id="load-data" class="section level2">
 <h2>Load Data</h2>
-<pre class="r"><code>rxParcelDF &lt;- read_csv(&#39;/data/jflournoy/SFIC_Self3/soc_acad/rxParcellations.csv&#39;) %&gt;%
+<pre class="r"><code>rxParcelDF &lt;- read_csv(file.path(data_dir, &#39;rxParcellations.csv&#39;)) %&gt;%
   left_join(parcel_label) %&gt;%
   mutate(label = ifelse(is.na(label), &#39;other&#39;, label))</code></pre>
 <pre><code>## Parsed with column specification:
@@ -612,7 +838,7 @@ fullModFXDF_w %&gt;%
 <pre><code>## Joining, by = &quot;parcellation&quot;</code></pre>
 <pre class="r"><code>#We want to order the parcels by their center of mass (done using 3dCM), in the x, y, and z plane
 slice_thickness &lt;- 7.5
-parcelCM &lt;- read_csv(&#39;/data/jflournoy/SFIC_Self3/soc_acad/roi_cm.csv&#39;) %&gt;%
+parcelCM &lt;- read_csv(file.path(data_dir, &#39;roi_cm.csv&#39;)) %&gt;%
   arrange(x, y, z) %&gt;%
   mutate(xord = as.numeric(factor(round(x/slice_thickness)*slice_thickness)), 
          yord = as.numeric(factor(round(y/slice_thickness)*slice_thickness)),
@@ -681,7 +907,7 @@ system.time({predTrajDF.sd.list &lt;- mclapply(mc.cores = 8, mc.preschedule = T,
   aDF
 })})</code></pre>
 <pre><code>##    user  system elapsed 
-##  43.620   1.704  12.475</code></pre>
+##  44.908   2.420  12.911</code></pre>
 <pre class="r"><code>predTrajDF.sd &lt;- bind_rows(predTrajDF.sd.list)</code></pre>
 </div>
 <div id="plot-rx-estimates" class="section level2">
@@ -705,7 +931,7 @@ system.time({predTrajDF.sd.list &lt;- mclapply(mc.cores = 8, mc.preschedule = T,
         panel.spacing = unit(0, &quot;lines&quot;))
 
 print(trajplot)</code></pre>
-<p><img src="soc_acad_parcels_files/figure-html/unnamed-chunk-10-1.png" width="1344" /></p>
+<p><img src="soc_acad_parcels_files/figure-html/unnamed-chunk-12-1.png" width="1344" /></p>
 </div>
 <div id="by-label" class="section level3">
 <h3>By label</h3>
@@ -723,8 +949,9 @@ print(trajplot)</code></pre>
         panel.spacing = unit(0, &quot;lines&quot;))
 
 print(trajplotbytype)</code></pre>
-<p><img src="soc_acad_parcels_files/figure-html/unnamed-chunk-11-1.png" width="1344" /></p>
-<pre><code># ggsave(&#39;/data/jflournoy/SFIC_Self3/soc_acad/trajectories_in_the_brain.svg&#39;, plot = trajplot, 
+<p><img src="soc_acad_parcels_files/figure-html/unnamed-chunk-13-1.png" width="1344" /></p>
+<pre class="r"><code># dev.off()</code></pre>
+<pre><code># ggsave(file.path(data_dir, &#39;trajectories_in_the_brain.svg&#39;), plot = trajplot, 
 #        width=12, height= 10, units = &#39;in&#39;)
 
 # predTrajDF.sd.cm %&gt;%
