@@ -1,7 +1,7 @@
 ---
 layout: post
 title: "Brief MLM tutorial"
-date: 2016-09-20 15:30:00 -0700
+date: 2016-09-20 12:30:00 -0700
 categories: R tutorials
 ---
 
@@ -21,7 +21,8 @@ MathJax.Hub.Config({
 });
 </script>
 
-**Updated: [plotting estimates](#plotting-model-estimates) from real data using `predict`.**
+**Updated: [plotting estimates]({{ page.url }}#plotting-model-estimates) from real data using `predict`.**
+
 
 This is a brief description of how to think about multi-level models, especially the link between the formal expression of these models and how that looks in `lme4`. The data set consists of 4 observations per day over 2 days of cortisol in a developmental sample. The relevant theoretical questions are: what individual-level predictors are related to cortisol intercepts and slopes.
 
@@ -93,7 +94,7 @@ Let's consider a model and some real data:
 
 ```r
 lmer(cort ~ 1 + time*ageyrs*SUBTYPE + gender  +steroid + meds +
-            (1 | IDENT_SUBID/index4),
+            (1 | IDENT_SUBID:index4) + (1 + time | IDENT_SUBID),
      data=aDF)
 ```
 
@@ -102,7 +103,7 @@ which expands to (grouping terms by the observation-level parameter they seek to
 ```r
 lmer(cort ~ 1 + ageyrs + SUBTYPE + ageyrs:SUBTYPE + gender + steroid + meds +
             time + time:ageyrs + time:SUBTYPE + time:ageyrs:SUBTYPE +
-            (1 | IDENT_SUBID/index4),
+            (1 | IDENT_SUBID:index4) + (1 + time | IDENT_SUBID),
      data=aDF)
 ```
 
@@ -113,7 +114,7 @@ head(aDF)
 
 We have cortisol measured at 4 different times per day (`index4`), over two days, nested within subjects. As I understand it, grouping by measurement within subject helps account for the possibility that some subjects wake up later than others, and so the intercept of the cortisol measurements for each timepoint may deviate from the expected value. 
 
-We have an observation-level variables: _time_; and several subject-level variables: _ageyrs_, _subtype_, _gender_, _steroid_, and _meds_. I think that this `lmer` call implies the following equations (but I don't often work with this kind of nesting), where _i_ is the observation index, _j_ is the measurement-within-subject index (`IDENT_SUBID:index4`), and _k_ is the subject index (`IDENT_SUBID`):
+We have an observation-level variable: _time_; and several subject-level variables: _ageyrs_, _subtype_, _gender_, _steroid_, and _meds_. I think that this `lmer` call implies the following equations (but I don't often work with this kind of nesting), where _i_ is the observation index, _j_ is the measurement-within-subject index (`IDENT_SUBID:index4`), and _k_ is the subject index (`IDENT_SUBID`):
 
 $$
 \begin{equation} 
@@ -123,7 +124,7 @@ $$
 \beta_{1jk} = &\gamma_{10k}\\
 \gamma_{00k} = &\delta_{000}+\delta_{001} \cdot \text{ageyrs}+\delta_{002} \cdot \text{SUBTYPE}+\delta_{003} \cdot \text{ageyrs:SUBTYPE}+\\
  & \delta_{004} \cdot \text{gender}+\delta_{005} \cdot \text{steroid}+\delta_{006} \cdot \text{meds}+v_{00k}\\
-\gamma_{10k} = &\delta_{100}+\delta_{101} \cdot \text{ageyrs}+\delta_{102} \cdot \text{SUBTYPE}+\delta_{103} \cdot \text{ageyrs:SUBTYPE}\\
+\gamma_{10k} = &\delta_{100}+\delta_{101} \cdot \text{ageyrs}+\delta_{102} \cdot \text{SUBTYPE}+\delta_{103} \cdot \text{ageyrs:SUBTYPE}+v_{10k}\\
 \end{split}
 \label{realcorteq}
 \end{equation}
@@ -135,12 +136,12 @@ We'll estimate the paramters for this model using the restricted data set in `aD
 library(lme4)
 aMod <- lmer(cort ~ 1 + ageyrs + SUBTYPE + ageyrs:SUBTYPE + gender + steroid + meds +
             time + time:ageyrs + time:SUBTYPE + time:ageyrs:SUBTYPE +
-            (1 | IDENT_SUBID/index4),
+            (1 | IDENT_SUBID:index4) + (1 + time | IDENT_SUBID),
      data=aDF)
 summary(aMod)
 ```
 
-The model object in `aMod` contains enought information that we can create a new data set and use `predict` to get expected values for plotting the interactions we're interested in. We'd like to plot the cortisol slope (x = time, y = cort) for different ages (grouping lines by integer ages, say), and we probably want a different plot for each subtype. We also need a value for every term in the model, so let's get the mean for our "control" variables: 
+The model object in `aMod` contains enough information that we can create a new data set and use `predict` to get expected values for plotting the interactions we're interested in. We'd like to plot the cortisol slope (x = time, y = cort) for different ages (grouping lines by integer ages, say), and we probably want a different plot for each subtype. We also need a value for every term in the model, so let's get the mean for our "control" variables: 
 
 ```{r}
 mean_gender = .5 #gender is coded 1 and 0
