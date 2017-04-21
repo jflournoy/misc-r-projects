@@ -1,0 +1,87 @@
+---
+Title: Regularized Networks
+Author: JCF
+---
+
+```{r}
+library(qgraph)
+library(tidyverse)
+data(big5)
+big5DF <- as.data.frame(big5)
+names(big5DF)
+dim(big5)
+```
+
+
+
+```{r}
+# big5X <- model.matrix(~(.)^2, big5DF)
+# big5XDF <- as.data.frame(big5X)
+set.seed(31337)
+library(glmnet)
+
+(system.time({big5fit_500 <- glmnet(x = big5[,-1], y = big5[,1], alpha = 1)}))
+plot.glmnet(big5fit_500, label = T)
+
+idx <- base::sample(1:500,size = 50,replace = F)
+
+(system.time({big5fit_250 <- glmnet(x = big5[idx,-1], y = big5[idx,1], alpha = 1)}))
+plot(big5fit_250, label = T)
+
+```
+
+Cross validation
+
+```{r}
+# library(NCmisc)
+# library(parallel)
+# cl <- makeCluster(4, type = 'SOCK')
+# print(cl)
+# nothing <- parLapply(cl, 1:16, function(x) {cor(replicate(3000, rnorm(500)))})
+# stopCluster(cl)
+
+library(parallel)
+big5names <- dimnames(big5)[[2]]
+
+cl <- makeCluster(8, type = 'SOCK')
+print(cl)
+clusterExport(cl, c('big5', 'big5names'))
+
+cvfits <- parLapply(cl, clusterSplit(cl, 1:dim(big5)[1]), function(xs){
+  lapply(xs, function(x) {
+    big5cvfit <- try(glmnet::cv.glmnet(x = big5[,-x], y = big5[,x], nfolds = 10, parallel = F))
+    dplyr::data_frame(x = x, name = big5names[x], cvfit = list(big5cvfit))
+  })
+})
+
+stopCluster(cl)
+
+plot(cvfits[[7]]$cvfit[[1]])
+
+
+```
+
+
+x1 ~ B11x2 + B12x3 + ... + B1kxK
+
+x2 ~ B21x3
+
+xk-1 ~ 
+
+...
+
+```{r}
+
+data <- replicate(50000, rnorm(150))
+system.time(corbigdata <- cor(data, data))
+
+head(corbigdata)
+
+```
+
+
+
+
+
+
+

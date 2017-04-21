@@ -1,0 +1,75 @@
+---
+title: "Playing with Caret"
+output: html_document
+---
+
+Playing with http://topepo.github.io/caret/pre-processing.html
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(caret)
+library(AppliedPredictiveModeling)
+theDF <- read_csv('~/code/misc-r-projects/caret_play/songs.csv')
+```
+
+```{r}
+library(AppliedPredictiveModeling)
+transparentTheme(trans = .4)
+library(caret)
+names(theDF)
+featurePlot(x = theDF[, 3:9],
+            y = factor(theDF$category),
+            plot = "pairs",
+            ## Add a key at the top
+            auto.key = list(columns = 4))
+
+featurePlot(x = theDF[, 3:9],
+            y = factor(theDF$category),
+            plot = "density", 
+            ## Pass in options to xyplot() to 
+            ## make it prettier
+            scales = list(x = list(relation="free"), 
+                          y = list(relation="free")), 
+            adjust = 1.5, 
+            pch = "|", 
+            layout = c(4, 2), 
+            auto.key = list(columns = 3))
+```
+
+```{r}
+library(caret)
+set.seed(3456)
+theDF$category <- factor(theDF$category)
+trainIndex <- createDataPartition(theDF$category, p = .75, 
+                                  list = FALSE, 
+                                  times = 1)
+head(trainIndex)
+
+train <- theDF[trainIndex, 3:10]
+test <- theDF[-trainIndex, 3:10]
+
+fitControl <- trainControl(## 10-fold CV
+                           method = "repeatedcv",
+                           number = 10,
+                           classProbs = T,
+                           ## repeated ten times,
+                           repeats = 10)
+
+set.seed(825)
+ldaFit1 <- train(category ~ ., data=train,
+                 method = "lda",
+                 trControl = fitControl,
+                 ## This last option is actually one
+                 ## for gbm() that passes through
+                 verbose = FALSE)
+ldaFit1
+
+test$pred <- predict.train(ldaFit1,test)
+
+test <- cbind(test, predict.train(ldaFit1, test, type = 'prob'))
+
+confusionMatrix(data = test$pred, reference = test$category)
+
+```

@@ -1,0 +1,260 @@
+---
+title: Derive residuals, analyze power
+author: John Flournoy, Bradley Hughes
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning=FALSE, message=FALSE, error=FALSE)
+library(MASS)
+library(simsem)
+library(lavaan)
+library(semPlot)
+library(stringr)
+library(tidyverse)
+library(knitr)
+```
+
+
+# Base Model
+
+The first half of the model is just traits to states, plus elicitation. There is no perceiver effect or realistic target perception
+
+```{r}
+model1 <- "
+#traits are real
+p1_state ~ tar1*p1_trait
+p2_state ~ tar1*p2_trait
+#p1_trait ~~ 0*p2_trait
+#elicitation
+p1_state ~ elic1*p2_state
+p2_state ~ elic1*p1_state
+p1_state ~~ 0*p2_state
+#residuals
+p1_state ~~ r1*p1_state
+p2_state ~~ r1*p2_state
+"
+
+#Define the path weights
+path_weights <- data.frame(
+  tar1=c(.4),
+  elic1=c(.39)
+)
+
+#Apply the path weights to the model
+dgm <- str_replace_all(model1, path_weights[1,])
+```
+
+Let's check it out:
+
+```{r}
+cat(dgm)
+```
+
+
+## Residuals to standardize paths
+
+Calculating the residuals we need to use in oreder to standardize this model is very difficult for some reason. Maybe it's just me, or maybe it's that its a non-recursive graph, but we broke our brains against this for days (hours, even). Then I realized that it's just an optimization problem in which you're trying to minimize the difference between the unstandardized and standardized path weights. All we had to do was write a function that takes the residual weights and returns the sum of the squared differences between the standardized and unstandardized coefficients. That function could just be given to `optim` which would do the heavy listing for us and return residuals that hopefully bring that difference to 0.
+
+```{r}
+to_optimize_full_model_residuals <- function(residual_vector, dgm, return_model=F){
+  require(stringr) #we use stringr to easily substitute the residual values in for the path notation, e.g., `r1` using `str_replace_all`
+  #
+  #This function takes a vector of values to set residuals, then applies those settings
+  #to the data generating model in `dgm`. It returns the sum of the squared differences
+  #between the unstandardize and standardized path weigts.
+  #
+  #For each element of residual_vector, it will try to replace `r[0-9]` in teh
+  #dgm text with that number.
+  
+  #how many residual values do we need to find?
+  len_resid_vec <- length(residual_vector)
+  #for every residual value, sub in for paths marked with "r1" ... "rn" in the model dgm syntax
+  names(residual_vector) <- paste0('r', 1:len_resid_vec) 
+  #do the substitution
+  dgm_resid <- str_replace_all(dgm, residual_vector)
+  
+  #fit the model without data so we can access the standardized path weights
+  afit <- sem(dgm_resid)
+  #calculate the sum of squared differences in the beta matrix
+  ss_beta_diffs <- sum((inspect(afit, what='est')$beta-inspect(afit, what='std')$beta)^2)
+  
+  #sometimes we may already know the optimal residual weights. In that case we just want this function to return
+  #the model syntax and also tell us the values for both standardized and unstandardized paths so we can
+  #confirm this is correct.
+  if(return_model){
+    cat("Starting Values Beta Matrix\n")
+    print(inspect(afit, what='est')$beta)
+    cat("Std Values Beta Matrix\n")
+    print(inspect(afit, what='std')$beta)
+    cat("Sum of the squared differences\n")
+    print(sum((inspect(afit, what='est')$beta-inspect(afit, what='std')$beta)^2))
+    return(dgm_resid)
+  } else {
+    return(ss_beta_diffs)
+  }
+}
+```
+
+Now that we have that function to use in our optimizer, let's do the optimization
+
+```{r}
+optimizedResidual <- optim(c(.2), to_optimize_full_model_residuals, dgm = dgm, lower=.001, upper=1, method='L-BFGS-B')
+dgm_resid <- to_optimize_full_model_residuals(optimizedResidual$par, dgm=dgm, return_model=T)
+
+cat(dgm_resid)
+```
+
+As you see above, we now have a model with residual variances that should standardize those path weights. Let's do a single run of `sim` to check it. By the way, if this runs, this also means that the model can both generate and fit the data without issue.
+
+```{r}
+aSim <- sim(nRep = 1, model = model1, generate = dgm_resid, n=10000)
+
+kable(t(aSim@paramValue), col.names = c('weight'), digits = 3, caption = "Param Values", format = "pandoc")
+kable(t(aSim@stdParamValue), col.names = c('weight'), digits = 3, caption = "Standardized Param Values", format = "pandoc")
+```
+
+And the coefficients roughly match:
+
+```{r}
+kable(t(aSim@coef), col.names = c('weight'), digits = 3, caption = "Coef Values", format = "pandoc")
+```
+
+# Full Model
+
+Now we can move on to the full model.
+
+```{r}
+model1 <- "
+#traits are real
+p1_state ~ tar1*p1_trait
+p2_state ~ tar1*p2_trait
+#p1_trait ~~ 0*p2_trait
+#elicitation
+p1_state ~ elic1*p2_state
+p2_state ~ elic1*p1_state
+p1_state ~~ 0*p2_state
+#residuals
+p1_state ~~ r1*p1_state
+p2_state ~~ r1*p2_state
+"
+full_model <- paste(model1, "
+#realistic perception
+p1_perc_p2 ~ rp1*p2_state
+p2_perc_p1 ~ rp1*p1_state
+#assumed similarity
+p1_perc_p2 ~ as1*p1_trait
+p2_perc_p1 ~ as1*p2_trait
+#perception predicted by own behavior
+p1_perc_p2 ~ pob1*p1_state
+p2_perc_p1 ~ pob1*p2_state
+#p1_perc_p2 ~~ 0*p2_perc_p1
+#residuals
+p1_perc_p2 ~~ r2*p1_perc_p2
+p2_perc_p1 ~~ r2*p2_perc_p1
+")
+pathweights <- data.frame(tar1 = c(.2), elic1 = c(.1), rp1 = c(.2), as1 = c(.2), pob1 = c(.08))
+dgm2 <- str_replace_all(full_model, pathweights[1,]) 
+```
+
+Let's look at the model syntax. Notice the weights I've included for this particular power analysis are much smaller than those in the literature. I'm being overly conservative so that we can get a sense of one worst-case scenario.
+
+```{r}
+cat(dgm2)
+```
+
+Now we can optimize to find both `r1` and `r2`. I increased the verbosity of the optim function so we can see a little bit more under the hood.
+
+```{r}
+optimizedResidual <- optim(c(.2, .2), 
+                           to_optimize_full_model_residuals, 
+                           dgm = dgm2,
+                           lower=.0001, upper=1, method='L-BFGS-B',
+                           control=list(trace=2))
+```
+
+Now output the optimized model:
+
+```{r}
+dgm_resid <- to_optimize_full_model_residuals(optimizedResidual$par, dgm2, T)
+```
+
+And finally, check out the model syntax:
+
+```{r}
+cat(dgm_resid)
+```
+
+## Model Plot
+
+Now that we have those residuals, we can use `semPaths` to plot the full model. The next chunk is hidden, but basically I produce the plot and then rearrange some of the nodes.
+
+```{r fig.width=10, fig.height=10, echo=FALSE, fig.show='hide'}
+agraph <- semPaths(dgm_resid, layout=igraph::layout_with_kk, whatLabels = 'est', nCharNodes=6, )
+p1_stt <- agraph$layout[1,]
+p2_stt <- agraph$layout[2,]
+p1_p_2 <- agraph$layout[3,]
+p2_p_1 <- agraph$layout[4,]
+p1_trt <- agraph$layout[5,]
+p2_trt <- agraph$layout[6,]
+agraph$layout[4,] <- p2_stt
+agraph$layout[1,] <- p2_p_1
+agraph$layout[2,] <- p1_stt
+```
+
+```{r fig.width=10, fig.height=10, echo=FALSE}
+plot(agraph)
+```
+
+
+# Power
+
+Now I'm going to set up a power analysis using this model. Keep in mind that if you want to change the paths for a different power analsis, you have to rerun the optimization in order to find the correct residual values.
+
+The first step is to add to our analysis model an estimate of the full path from traits to elicitation to perception (that is, the full mediational pathway). It's not strictly necessary, but it sounded like an interesting estimate to be able to provide, so we may as well find our power to detect it.
+
+```{r}
+full_model_med <- paste0(full_model, "
+elic_med := tar1*elic1*rp1
+")
+cat(full_model_med)
+```
+
+As you see, same model, just now with that calculated parameter (`elic_med`). It's important that we didn't add this line before substituting in the values for the data generating model or else the `tar1`, `elic1`, and `rp1` paths would have been replaced.
+
+## What sample sizes?
+
+In the `sim` call below, instead of specifying the number of repetitions at one sample size with `nRep`, I specify a range of `n` that is repeated 20 times. Arbitrarily, I've chosen for n to be 50 to 400 by 20. Each sample size gets 20 simulations. Eventually, `simSem` will actually fit a logistic curve to the resulting pattern, so I could have just incrememented by 1. I've done that in the past and this seems to produce better results, but feel free to play around with that. Also notice that arguments `multicore=T, numProc=6`. This allows 6 iterations to be run in parallel. You may have to remove these arguments depending on your machine, but it's worth a try to speed things up.
+
+```{r}
+powerSims <- sim(generate = dgm_resid, model=full_model_med, n=rep(seq(50, 400, 20), 20), lavaanfun = 'sem', multicore=T, numProc=6)
+```
+
+Now that we have the simulations, I can extract information from them. First, I need a table of all the results, which I get with `getPower`. Then, I can use `findPower` to get a table of sample sizes (`N`) for each level of power.
+
+```{r}
+powerTable <- getPower(powerSims)
+kable(findPower(powerTable=powerTable, iv = "N", power = .8), col.names = 'N', caption = "80% Power", format = "pandoc")
+kable(findPower(powerTable=powerTable, iv = "N", power = .95), col.names = 'N', caption = "95% Power", format = "pandoc")
+```
+
+We can also produce some plots of how power changes continuously as a function of N. This is pretty straightforward with `simSem`, which gives us a function called `continuousPower` that literally calculates the expected power for every single N from our min to max using the estimated logistic curve from our simulated data. Once we have that data in `cpow`, we can just plot the particular path we're interested in (e.g., `elic1 <- (p1_state~p2_state)`) against sample size (in the column named `iv.N`).
+
+
+```{r fig.width=6, fig.height=5}
+cpow <- continuousPower(powerSims, contN=TRUE, contMCAR = F)
+ggplot(as_data_frame(cpow), aes(x=iv.N, y=`elic1 <- (p1_state~p2_state)`))+
+  geom_hline(yintercept = c(.8, .95), size=.5, color='gray')+
+  geom_line()+
+  theme(panel.background=element_rect(fill='#fafafa'))
+
+ggplot(as_data_frame(cpow), aes(x=iv.N, y=elic_med))+
+  geom_hline(yintercept = c(.8, .95), size=.5, color='gray')+
+  geom_line()+
+  theme(panel.background=element_rect(fill='#fafafa'))
+```
+
+
