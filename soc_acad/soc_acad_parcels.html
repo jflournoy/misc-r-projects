@@ -238,7 +238,7 @@ library(tidyverse)</code></pre>
 <pre class="r"><code>data_dir &lt;- &#39;/data/jflournoy/SFIC_Self3/soc_acad/&#39;
 social.roi &lt;- c(174, 18, 50, 119, 12, 171, 70, 144, 150, 156, 105, 102, 113, 55, 92, 137, 168, 122, 125, 62, 47, 190, 77, 155, 163, 25, 130)
 self.roi &lt;- c(130, 156, 174, 18, 25, 37, 50, 55, 150, 156, 105)
-poi &lt;- c(18, 150, 156, 174) #specify parcels of particular interest for highlighting in the random effects plots
+poi &lt;- c(18, 50, 55, 174) #specify parcels of particular interest for highlighting in the random effects plots
 ogpx &lt;- c(&#39;s001&#39;,
           &#39;s005&#39;,
           &#39;s007&#39;,
@@ -1072,7 +1072,7 @@ check_plot &lt;- checkDF_w %&gt;%
   ggplot(aes(x = domain, y = mean_so21, fill = val_type, group = val_type)) +
   geom_col(position = position_dodge(width = 1)) + 
   geom_errorbar(aes(ymin = se_l, ymax = se_u), width = 0, position = position_dodge(width = 1)) + 
-  scale_fill_manual(limits = c(&#39;beta&#39;, &#39;expected&#39;), values = c(&#39;purple&#39;, &#39;salmon&#39;), labels = c(&#39;raw&#39;, &#39;model expectation&#39;)) + 
+  scale_fill_manual(limits = c(&#39;beta&#39;, &#39;expected&#39;), values = c(&#39;darkgreen&#39;, &#39;lightgreen&#39;), labels = c(&#39;raw&#39;, &#39;model expectation&#39;)) + 
   scale_x_discrete(limits = c(&#39;social&#39;, &#39;academic&#39;), labels=c(&#39;social&#39;, &#39;academic&#39;)) + 
   labs(y = &#39;Average parcel activity&#39;, x = &#39;T2(Self - Other) - T1(Self - Other)&#39;, fill = &#39;Data type&#39;)+
   facet_grid(~parcellation, labeller = &#39;label_both&#39;)
