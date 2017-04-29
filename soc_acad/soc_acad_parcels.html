@@ -123,7 +123,7 @@ $(document).ready(function ()  {
 
     // establish options
     var options = {
-      selectors: "h1,h2,h3",
+      selectors: "h1,h2,h3,h4",
       theme: "bootstrap3",
       context: '.toc-content',
       hashGenerator: function (text) {
@@ -238,7 +238,35 @@ library(tidyverse)</code></pre>
 <pre class="r"><code>data_dir &lt;- &#39;/data/jflournoy/SFIC_Self3/soc_acad/&#39;
 social.roi &lt;- c(174, 18, 50, 119, 12, 171, 70, 144, 150, 156, 105, 102, 113, 55, 92, 137, 168, 122, 125, 62, 47, 190, 77, 155, 163, 25, 130)
 self.roi &lt;- c(130, 156, 174, 18, 25, 37, 50, 55, 150, 156, 105)
-poi &lt;- c(50, 18, 174) #specify parcels of particular interest for highlighting in the random effects plots
+poi &lt;- c(18, 150, 156, 174) #specify parcels of particular interest for highlighting in the random effects plots
+ogpx &lt;- c(&#39;s001&#39;,
+          &#39;s005&#39;,
+          &#39;s007&#39;,
+          &#39;s009&#39;,
+          &#39;s016&#39;,
+          &#39;s019&#39;,
+          &#39;s020&#39;,
+          &#39;s022&#39;,
+          &#39;s023&#39;,
+          &#39;s024&#39;,
+          &#39;s029&#39;,
+          &#39;s030&#39;,
+          &#39;s032&#39;,
+          &#39;s035&#39;,
+          &#39;s038&#39;,
+          &#39;s042&#39;,
+          &#39;s045&#39;,
+          &#39;s058&#39;,
+          &#39;s060&#39;,
+          &#39;s064&#39;,
+          &#39;s065&#39;,
+          &#39;s071&#39;,
+          &#39;s072&#39;,
+          &#39;s073&#39;,
+          &#39;s086&#39;,
+          &#39;s089&#39;,
+          &#39;s092&#39;)
+
 
 parcel_label &lt;- data_frame(parcellation = c(social.roi, self.roi),
                            label = c(rep(&#39;social&#39;, length(social.roi)), 
@@ -914,7 +942,9 @@ anova(max_rx_fullModel, max_REMLfullModel, refit = F)[,-1]</code></pre>
 
 color_palette &lt;- wes_palette(name = &#39;Moonrise2&#39;, n = 4)
 
-parcel_labeller &lt;- as_labeller(c(&#39;social&#39;=&#39;Social parcels&#39;, &#39;other&#39;=&#39;Non-social parcels&#39;))
+parcel_labeller &lt;- labeller(label = c(&#39;social&#39;=&#39;Social parcels&#39;, &#39;other&#39;=&#39;Non-social parcels&#39;),
+                            target = c(&#39;self&#39;=&#39;Self&#39;, &#39;other&#39;=&#39;Other&#39;),
+                            domain = c(&#39;social&#39;=&#39;Social domain&#39;, &#39;academic&#39;=&#39;Academic domain&#39;))
 
 model_to_plot &lt;- max_rx_fullModel
 
@@ -933,12 +963,13 @@ rawExPlot &lt;- fxParcelDF.agec %&gt;%
   ggplot(aes(x = age, y = expected, group = parcellation)) + 
   geom_point(aes(y = beta), alpha = .15, size = .5, color = color_palette[1]) + 
   geom_line(aes(y = beta, group = interaction(subjectID, parcellation)), alpha = .04, size = .5, color = color_palette[1]) + 
-  geom_line(alpha = .4, color = color_palette[4]) +
-  geom_line(aes(y = expected_mean), color = color_palette[2], 
+  geom_line(alpha = .4, color = color_palette[2]) +
+  geom_line(aes(y = expected_mean), color = color_palette[4], 
             data = distinct(fxParcelDF.agec,
                             parcellation, target, domain, age, expected_mean, label, .keep_all = T),
             size = 1) + 
   coord_cartesian(y = c(-1, 1)) + 
+  scale_x_continuous(breaks = 10:18) + 
   facet_grid(target+domain~label, labeller = parcel_labeller) + 
   theme(panel.background = element_rect(fill = &#39;white&#39;))
 
@@ -956,7 +987,8 @@ print(rawExPlot)</code></pre>
   geom_line(size = .5, stat = &#39;smooth&#39;, method = &#39;lm&#39;, formula = y ~ poly(x,2)) + 
   # coord_cartesian(y = c(-1, 1)) + 
   scale_color_manual(breaks = c(&#39;self&#39;, &#39;other&#39;), values = c(self=color_palette[2], other=color_palette[1]))+
-  facet_grid(label~., labeller = parcel_labeller) + 
+  scale_x_continuous(breaks = 10:18) + 
+  facet_grid(~label, labeller = parcel_labeller) + 
   theme(panel.background = element_rect(fill = &#39;white&#39;))
 print(avgFxPlot)</code></pre>
 <p><img src="soc_acad_parcels_files/figure-html/unnamed-chunk-7-1.png" width="672" /></p>
@@ -1011,6 +1043,63 @@ contrastedPlot &lt;- fullModFXDF_w_so %&gt;%
 print(contrastedPlot)</code></pre>
 <p><img src="soc_acad_parcels_files/figure-html/unnamed-chunk-9-1.png" width="480" /></p>
 </div>
+<div id="check-the-paper" class="section level4">
+<h4>Check the paper</h4>
+<p>Using the original subjects: s001, s005, s007, s009, s016, s019, s020, s022, s023, s024, s029, s030, s032, s035, s038, s042, s045, s058, s060, s064, s065, s071, s072, s073, s086, s089, s092</p>
+<pre class="r"><code>parcel_labeller2 &lt;- labeller(label = c(&#39;social&#39;=&#39;Social parcels&#39;, &#39;other&#39;=&#39;Non-social parcels&#39;),
+                            target = c(&#39;self&#39;=&#39;Self&#39;, &#39;other&#39;=&#39;Other&#39;),
+                            domain = c(&#39;social&#39;=&#39;Social domain&#39;, &#39;academic&#39;=&#39;Academic domain&#39;),
+                            parcellation = I)
+
+REFormString1 &lt;- as.character(findbars(model_to_plot@call$formula)[[1]])
+REFormString2 &lt;- as.character(findbars(model_to_plot@call$formula)[[2]])
+reForm &lt;- as.formula(paste0(&#39;~(&#39;, REFormString1[[2]], REFormString1[[1]], REFormString1[[3]], &#39;) + (&#39;, REFormString2[[2]], REFormString2[[1]], REFormString2[[3]], &#39; )&#39;))
+
+checkDF &lt;- fxParcelDF.agec %&gt;% filter(wavenum %in% 1:2) 
+checkDF$expected &lt;- predict(model_to_plot, newdata = checkDF, re.form = reForm)
+
+checkDF_w &lt;- checkDF %&gt;% 
+  filter(subjectID %in% ogpx, parcellation %in% poi) %&gt;%
+  select(subjectID, target, domain, parcellation, beta, expected, wavenum, label) %&gt;%
+  gather(val_type, value, beta, expected) %&gt;%
+  unite(target_wavenum, target, wavenum) %&gt;%
+  spread(target_wavenum, value) %&gt;%
+  mutate(SvO_2v1 = (self_2 - other_2) - (self_1 - other_1)) %&gt;%
+  group_by(domain, parcellation, val_type, label) %&gt;%
+  summarize(mean_so21 = mean(SvO_2v1, na.rm = T), se = sd(SvO_2v1, na.rm = T)/(n())^.5, se_u = mean_so21 + se, se_l =  mean_so21 - se)
+
+check_plot &lt;- checkDF_w %&gt;% 
+  ggplot(aes(x = domain, y = mean_so21, fill = val_type, group = val_type)) +
+  geom_col(position = position_dodge(width = 1)) + 
+  geom_errorbar(aes(ymin = se_l, ymax = se_u), width = 0, position = position_dodge(width = 1)) + 
+  scale_fill_manual(limits = c(&#39;beta&#39;, &#39;expected&#39;), values = c(&#39;purple&#39;, &#39;salmon&#39;), labels = c(&#39;raw&#39;, &#39;model expectation&#39;)) + 
+  scale_x_discrete(limits = c(&#39;social&#39;, &#39;academic&#39;), labels=c(&#39;social&#39;, &#39;academic&#39;)) + 
+  labs(y = &#39;Average parcel activity&#39;, x = &#39;T2(Self - Other) - T1(Self - Other)&#39;, fill = &#39;Data type&#39;)+
+  facet_grid(~parcellation, labeller = &#39;label_both&#39;)
+print(check_plot)</code></pre>
+<p><img src="soc_acad_parcels_files/figure-html/unnamed-chunk-10-1.png" width="672" /></p>
+<p>Looking at how overall means might be constraining the estimates:</p>
+<pre class="r"><code>checkDF_w_all &lt;- checkDF %&gt;%
+  select(subjectID, target, domain, parcellation, beta, expected, wavenum, label) %&gt;%
+  gather(val_type, value, beta, expected) %&gt;%
+  unite(target_wavenum, target, wavenum) %&gt;%
+  spread(target_wavenum, value) %&gt;%
+  mutate(SvO_2v1 = (self_2 - other_2) - (self_1 - other_1)) %&gt;%
+  group_by(domain, parcellation, val_type, label) %&gt;%
+  summarize(mean_so21 = mean(SvO_2v1, na.rm = T), se = sd(SvO_2v1, na.rm = T)/(n())^.5, se_u = mean_so21 + se, se_l =  mean_so21 - se) %&gt;%
+  ungroup %&gt;%
+  mutate(domain = factor(domain, levels = c(&#39;social&#39;, &#39;academic&#39;)))
+checkDF_w_all_plot &lt;- checkDF_w_all %&gt;% 
+  ggplot(aes(x = val_type, y = mean_so21, fill = domain, group = interaction(parcellation, domain))) +
+  geom_col(position = position_dodge(width = .5)) + 
+  geom_errorbar(aes(ymin = se_l, ymax = se_u), size = .25, alpha = .2,  width = 0, position = position_dodge(width = .5)) + 
+  scale_fill_manual(limits = c(&#39;social&#39;, &#39;academic&#39;), values = c(&#39;blue&#39;, &#39;red&#39;)) + 
+  scale_x_discrete(limits = c(&#39;beta&#39;, &#39;expected&#39;), labels=c(&#39;raw&#39;, &#39;model expectation&#39;)) + 
+  labs(y = &#39;Average parcel activity&#39;, x = &#39;T2(Self - Other) - T1(Self - Other)&#39;)+
+  facet_grid(~label, labeller = parcel_labeller)
+print(checkDF_w_all_plot)</code></pre>
+<p><img src="soc_acad_parcels_files/figure-html/unnamed-chunk-11-1.png" width="672" /></p>
+</div>
 </div>
 <div id="contrasty-random-effects" class="section level3">
 <h3>Contrasty Random Effects</h3>
@@ -1059,7 +1148,7 @@ contrastyFxPlot &lt;- fullModFXDF_w %&gt;%
   theme(panel.background = element_rect(fill = &#39;white&#39;))+
   labs(x = &#39;Age&#39;, y = &#39;Expected value of social - academic contrast\nper parcel, and on average&#39;)
 print(contrastyFxPlot)</code></pre>
-<p><img src="soc_acad_parcels_files/figure-html/unnamed-chunk-10-1.png" width="672" /></p>
+<p><img src="soc_acad_parcels_files/figure-html/unnamed-chunk-12-1.png" width="672" /></p>
 </div>
 <div id="self---other-1" class="section level4">
 <h4>Self - Other</h4>
@@ -1086,7 +1175,7 @@ contrastyFxPlot_so &lt;- fullModFXDF_w_so %&gt;%
   theme(panel.background = element_rect(fill = &#39;white&#39;))+
   labs(x = &#39;Age&#39;, y = &#39;Expected value of social - academic contrast\nper parcel, and on average&#39;)
 print(contrastyFxPlot_so)</code></pre>
-<p><img src="soc_acad_parcels_files/figure-html/unnamed-chunk-11-1.png" width="672" /></p>
+<p><img src="soc_acad_parcels_files/figure-html/unnamed-chunk-13-1.png" width="672" /></p>
 </div>
 </div>
 <div id="extra-contrasty-random-effects" class="section level3">
@@ -1115,7 +1204,7 @@ extraMoreContrastyPlot &lt;- fullModFXDF_ww %&gt;%
   labs(x = &#39;Age&#39;, y = &#39;Expected value of \nself(social - academic) - other(social - academic) contrast\nper parcel, and on average&#39;,
        color = &#39;Parcel&#39;)
 print(extraMoreContrastyPlot)</code></pre>
-<p><img src="soc_acad_parcels_files/figure-html/unnamed-chunk-12-1.png" width="672" /></p>
+<p><img src="soc_acad_parcels_files/figure-html/unnamed-chunk-14-1.png" width="672" /></p>
 </div>
 </div>
 </div>
@@ -1205,7 +1294,7 @@ system.time({predTrajDF.sd.list &lt;- mclapply(mc.cores = 8, mc.preschedule = T,
   aDF
 })})</code></pre>
 <pre><code>##    user  system elapsed 
-##  46.368   2.628  13.742</code></pre>
+##  47.440   1.712  13.792</code></pre>
 <pre class="r"><code>predTrajDF.sd &lt;- bind_rows(predTrajDF.sd.list)</code></pre>
 </div>
 <div id="plot-rx-estimates" class="section level2">
@@ -1229,7 +1318,7 @@ system.time({predTrajDF.sd.list &lt;- mclapply(mc.cores = 8, mc.preschedule = T,
         panel.spacing = unit(0, &quot;lines&quot;))
 
 print(trajplot)</code></pre>
-<p><img src="soc_acad_parcels_files/figure-html/unnamed-chunk-15-1.png" width="1344" /></p>
+<p><img src="soc_acad_parcels_files/figure-html/unnamed-chunk-17-1.png" width="1344" /></p>
 </div>
 <div id="by-label" class="section level3">
 <h3>By label</h3>
@@ -1247,7 +1336,7 @@ print(trajplot)</code></pre>
         panel.spacing = unit(0, &quot;lines&quot;))
 
 print(trajplotbytype)</code></pre>
-<p><img src="soc_acad_parcels_files/figure-html/unnamed-chunk-16-1.png" width="1344" /></p>
+<p><img src="soc_acad_parcels_files/figure-html/unnamed-chunk-18-1.png" width="1344" /></p>
 <pre class="r"><code># dev.off()</code></pre>
 <pre><code># ggsave(file.path(data_dir, &#39;trajectories_in_the_brain.svg&#39;), plot = trajplot, 
 #        width=12, height= 10, units = &#39;in&#39;)
