@@ -7,7 +7,7 @@ RI-CLPM
 =======
 
 This is code for implementing the Random Intercept Cross Lagged Panel
-Model proposed by Hamaker et al (Hamaker, Kuiper, and P 2015).
+Model proposed by Hamaker et al (Hamaker, Kuiper, and Grasman 2015).
 
 The model looks like this:
 
@@ -330,6 +330,6 @@ and get the same problem, please let me know.
 References
 ==========
 
-Hamaker, Ellen L., Rebecca M. Kuiper, and P. P. P. 2015. “A Critique of
-the Cross-Lagged Panel Model.” *Psychological Methods* 20 (1): 102–16.
-doi:[10.1037/a0038889](https://doi.org/10.1037/a0038889).
+Hamaker, Ellen L., Rebecca M. Kuiper, and Raoul P. P. P. Grasman. 2015.
+“A Critique of the Cross-Lagged Panel Model.” *Psychological Methods* 20
+(1): 102–16. doi:[10.1037/a0038889](https://doi.org/10.1037/a0038889).
