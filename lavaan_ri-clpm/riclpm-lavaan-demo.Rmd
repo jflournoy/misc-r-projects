@@ -40,7 +40,7 @@ require(lavaan)
 require(tidyverse)
 ```
 
-# Critique of Cross-lagged pannel models
+# Critique of cross-lagged pannel models
 
 This post summarizes critiques of the traditional cross-lagged panel model (CLPM), and an improved model by Hamaker, Kuiper, and Grasman  [-@Hamakercritiquecrosslaggedpanel2015].
 
@@ -247,7 +247,7 @@ summary(fitCLPM, standardize = T)
 
 ### Adding constraints to RI-CLPM
 
-For parsimony, I usually try to constraint my autoregressive and cross-lagged paths to be the same across intervals. Oh, and residuals too. I'll do this in the following code and then check the fit agains the unconstrained model. To do this, all I have to do is make sure the paths have the same name, like `alpha` instead of `alpha2` and `alpha3`.
+For parsimony, I usually try to constraint my autoregressive and cross-lagged paths to be the same across intervals. Oh, and residuals too. I'll do this in the following code and then check the fit against the unconstrained model. To do this, all I have to do is make sure the paths have the same name, like `alpha` instead of `alpha2` and `alpha3`.
 
 ```{r constrained}
 riclpmModelConstrainedARCL <- 

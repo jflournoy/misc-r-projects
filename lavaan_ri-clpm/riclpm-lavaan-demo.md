@@ -1,4 +1,4 @@
--   [Critique of Cross-lagged pannel
+-   [Critique of cross-lagged pannel
     models](#critique-of-cross-lagged-pannel-models)
 -   [RI-CLPM](#ri-clpm)
 -   [Implemmenting the RI-CLPM in R](#implemmenting-the-ri-clpm-in-r)
@@ -16,7 +16,7 @@
     require(lavaan)
     require(tidyverse)
 
-Critique of Cross-lagged pannel models
+Critique of cross-lagged pannel models
 ======================================
 
 This post summarizes critiques of the traditional cross-lagged panel
@@ -605,7 +605,7 @@ standardized estimates to compare to the unconstrained RI-CLPM above.
 
 For parsimony, I usually try to constraint my autoregressive and
 cross-lagged paths to be the same across intervals. Oh, and residuals
-too. I'll do this in the following code and then check the fit agains
+too. I'll do this in the following code and then check the fit against
 the unconstrained model. To do this, all I have to do is make sure the
 paths have the same name, like `alpha` instead of `alpha2` and `alpha3`.
 
