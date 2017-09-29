@@ -1,34 +1,75 @@
+-   [Critique of Cross-lagged pannel
+    models](#critique-of-cross-lagged-pannel-models)
 -   [RI-CLPM](#ri-clpm)
--   [Example data](#example-data)
+-   [Implemmenting the RI-CLPM in R](#implemmenting-the-ri-clpm-in-r)
 -   [Fitting a RI-CLPM](#fitting-a-ri-clpm)
 -   [References](#references)
+
+Critique of Cross-lagged pannel models
+======================================
+
+This post summarizes critiques of the traditional cross-lagged panel
+model (CLPM), and an improved model by Hamaker, Kuiper, and Grasman
+(2015).
+
+The primary point Hamaker and colleagues make regarding the CLPM is that
+it assumes that there are "no trait-like individual differences that
+endure." That is, looking at the structure of a CLPM it is clear that
+individual-level stability must be accounted for entirely by the
+auto-regressive path between waves. As they put it, it imposes an
+assumption that there is no between-subject variance of time-invariant,
+trait-like stability, but only temporal stability, wave to wave, of
+subjects around the mean score for any particular wave.
 
 RI-CLPM
 =======
 
-This is code for implementing the Random Intercept Cross Lagged Panel
-Model proposed by Hamaker et al (Hamaker, Kuiper, and Grasman 2015).
+A key insight of the paper is that "we need to separate the
+*within-person level* from the *between-person level*" (p. 104). The
+model they propose, the Random Intercept CLPM (RI-CLPM) separates each
+person's score on a variable at each wave into the group mean for that
+wave (*μ*<sub>*t*</sub>, *π*<sub>*t*</sub>), an individuals stable score
+over all waves (the random intercept;
+*κ*<sub>*i*</sub>, *ω*<sub>*i*</sub>) and then an individual level
+deviation at each wave from the score expected by adding the
+group-wave-mean and individual trait
+(*p*<sub>*i**t*</sub>, *q*<sub>*i**t*</sub>).
 
 The model looks like this:
 
 ![RI-CLPM Diagram](hamaker-diagram.png)
 
-The first thing to not is the trick they use to separate out between and
-within person variance. It's really cool actually. Instead of using the
-items directly, they model a mean structure for the items, and then
-essentially turn the residuals of that mean structure into
-single-indicator factors (with loadings fixed at 1). After you've
-"extracted" all the mean variance, you perform the cross-lagged analysis
-on the residuals via these factors. Read the paper for a
-less...casual...explantion.
+Effectively, now, the paths *α*<sub>*t*</sub> (or *δ*<sub>*t*</sub>)
+between *p*<sub>*i**t*</sub> (or *q*<sub>*i**t*</sub>) and
+*p*<sub>*i*(*t* + 1)</sub> (or *q*<sub>*i*(*t* + 1)</sub>) no longer
+capture rank-order stability of individuals, but rather a within-person
+carry-over effect.
 
-Example data
-============
+> If it is positive, it implies that occasions on which a person scored
+> above his or her expected score are likely to be followed by occasions
+> on which he or she still scores above the expected score again, and
+> vice versa. (p. 104)
 
-This is a crack at the code. Please let me know if you see something
-wrong.
+More importantly, since *κ* and *ω* separate out individual-level
+stability, the cross-lagged paths *β*<sub>*t*</sub> and
+*γ*<sub>*t*</sub> are now straightforward to interpret as the within
+person of effect of one variable on the subsequent measurement of a
+second variable. This interpretive boost is allowed now because, for
+example, *β*<sub>*t*</sub> is the estimate of the additional explanatory
+power of *deviations from trait-stable levels* on variable
+*y*<sub>*t*</sub> on the *deviations* of the observed variable
+*x*<sub>*t* + 1</sub> from the group mean and individual trait
+(*μ*<sub>*t* + 1</sub> + *κ*<sub>*i*</sub>) after accounting for the
+expected within-person carry-over effect, *α*<sub>*t*</sub>.
 
-First, we'll load the data
+See the paper (Figure 2) for a demonstration of how terribly traditional
+CLPM performs when you have a data generating process that matches the
+RI-CLPM -- that is, when you have stable individual differences.
+
+Implemmenting the RI-CLPM in R
+==============================
+
+First, we need some data
 
     #install.packages('lavaan')
     require(lavaan)
@@ -147,10 +188,10 @@ First, we'll load the data
 
 ![](riclpm-lavaan-demo_files/figure-markdown_strict/lavaan%20demo%20growth%20data-1.png)
 
-Well, look at that. The Demo.growth data has two time varrying
-variables, `t`, and `c`. Just right for our purposes.
+Well, look at that. The Demo.growth data has two time varying variables,
+`t`, and `c`. Just right for our purposes.
 
-In the below `lavaan` code, I'll be using the notaiton from the diagram,
+In the below `lavaan` code, I'll be using the notation from the diagram,
 except instead of "x" and "y", I'll use "t" and "c". I am explicitly
 specifying everything in the diagram, which is why in the call to
 `lavaan` I set a bunch of `auto` options to false. This is because often
@@ -164,7 +205,7 @@ Fitting a RI-CLPM
 The lavaan code below uses syntax that can be found in their help docs
 for the [basic stuff](http://lavaan.ugent.be/tutorial/syntax1.html) as
 well as the more
-[advanced](http://lavaan.ugent.be/tutorial/syntax2.html) labelling and
+[advanced](http://lavaan.ugent.be/tutorial/syntax2.html) labeling and
 constraining.
 
     riclpmModel <- 
