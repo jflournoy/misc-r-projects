@@ -32,6 +32,14 @@ references:
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
+```{r packages, message = F, warning = F}
+#if you need to install anything, uncomment the below install lines for now
+#install.packages('lavaan')
+#install.packages('tidyverse')
+require(lavaan)
+require(tidyverse)
+```
+
 # Critique of Cross-lagged pannel models
 
 This post summarizes critiques of the traditional cross-lagged panel model (CLPM), and an improved model by Hamaker, Kuiper, and Grasman  [-@Hamakercritiquecrosslaggedpanel2015].
@@ -56,63 +64,80 @@ See the paper (Figure 2) for a demonstration of how terribly traditional CLPM pe
 
 # Implemmenting the RI-CLPM in R
 
-First, we need some data
+## Some data
 
-```{r, lavaan demo growth data, message = F, warning = F}
-#install.packages('lavaan')
-require(lavaan)
-require(tidyverse)
-data("Demo.growth")
+First, we need some data. I'm using a data set presented on at a methods symposium at SRCD in 1997. Supporting documentation can be found [in this pdf](srcdmeth.pdf). Data and code for importing it was helpfully provided by [Sanjay Srivastava](http://twitter.com/hardsci).
 
-knitr::kable(summary(Demo.growth))
+The variables we're considering are a measure of antisocial behavior (`anti`) and reading recognition (`read`). See the docs for descriptions of the other variables. And for the purpose of the model fitting below, `x <- anit` and `y <- read`.
 
-Demo.growth %>%
+```{r, lavaan demo growth data}
+antiread <- read.table("srcddata.dat",
+                       na.strings = c("999.00"),
+                       col.names = c("anti1", "anti2", "anti3", "anti4", 
+                                     "read1", "read2", "read3", "read4",
+                                     "gen", "momage", "kidage", "homecog", 
+                                     "homeemo", "id")
+) %>%
+  rename(x1 = anti1, x2 = anti2, x3 = anti3, x4 = anti4,
+         y1 = read1, y2 = read2, y3 = read3, y4 = read4) %>%
+  select(matches('[xy][1-4]'))
+
+knitr::kable(summary(antiread), format = 'markdown')
+
+antiread %>%
   mutate(pid = 1:n()) %>%
-  gather(key, value, -pid, -x1, -x2) %>%
+  gather(key, value, -pid) %>%
+  extract(col = key, into = c('var', 'wave'), regex = '(\\w)(\\d)') %>%
+  ggplot(aes(x = value)) +
+  geom_density(alpha = 1) + 
+  facet_wrap(~var, nrow = 1, scales = 'free') + 
+  theme_classic()
+  
+antiread %>%
+  mutate(pid = 1:n()) %>%
+  gather(key, value, -pid) %>%
   extract(col = key, into = c('var', 'wave'), regex = '(\\w)(\\d)') %>%
   ggplot(aes(x = wave, y = value, color = var, group = var)) +
   geom_point(position = position_jitter(w = .2), alpha = .1) +
   geom_line(stat = 'identity', aes(group = interaction(var, pid)), alpha = .04) + 
   geom_line(stat = 'smooth', method = 'lm', size = 1) + 
   theme_classic()
-  
+
 ```
 
-Well, look at that. The Demo.growth data has two time varying variables, `t`, and `c`. Just right for our purposes.
+## Fitting a RI-CLPM
 
-In the below `lavaan` code, I'll be using the notation from the diagram, except instead of "x" and "y", I'll use "t" and "c". I am explicitly specifying everything in the diagram, which is why in the call to `lavaan` I set a bunch of `auto` options to false. This is because often lavaan will try to automatically estimate things that you don't usually write out but often want estimated, like residuals. Because this model is unorthodox, I want to be as explicit as possible.
-
-# Fitting a RI-CLPM
+In the below `lavaan` code, I'll be using the notation from the diagram. I am explicitly specifying everything in the diagram, which is why in the call to `lavaan` I set a bunch of `auto` options to false. This is because often lavaan will try to automatically estimate things that you don't usually write out but often want estimated, like residuals. Because this model is unorthodox, I want to be as explicit as possible.
 
 The lavaan code below uses syntax that can be found in their help docs for the [basic stuff](http://lavaan.ugent.be/tutorial/syntax1.html) as well as the more [advanced](http://lavaan.ugent.be/tutorial/syntax2.html) labeling and constraining.
 
 ```{r,lavaan ri-clpm}
 riclpmModel <- 
 '
-#Note, the data contain t1-3 and c1-3
+#Note, the data contain x1-3 and y1-3
 #Latent mean Structure with intercepts
 
-kappa =~ 1*t1 + 1*t2 + 1*t3
-omega =~ 1*c1 + 1*c2 + 1*c3
+kappa =~ 1*x1 + 1*x2 + 1*x3
+omega =~ 1*y1 + 1*y2 + 1*y3
 
-t1 ~ mu1*1 #intercepts
-t2 ~ mu2*1
-t3 ~ mu3*1
-c1 ~ pi1*1
-c2 ~ pi2*1
-c3 ~ pi3*1
+x1 ~ mu1*1 #intercepts
+x2 ~ mu2*1
+x3 ~ mu3*1
+y1 ~ pi1*1
+y2 ~ pi2*1
+y3 ~ pi3*1
 
 kappa ~~ kappa #variance
 omega ~~ omega #variance
 kappa ~~ omega #covariance
 
 #laten vars for AR and cross-lagged effects
-p1 =~ 1*t1 #each factor loading set to 1
-p2 =~ 1*t2
-p3 =~ 1*t3
-q1 =~ 1*c1
-q2 =~ 1*c2
-q3 =~ 1*c3
+p1 =~ 1*x1 #each factor loading set to 1
+p2 =~ 1*x2
+p3 =~ 1*x3
+q1 =~ 1*y1
+q2 =~ 1*y2
+q3 =~ 1*y3
 
 #constrain autoregression and cross lagged effects to be the same across both lags.
 p3 ~ alpha3*p2 + beta3*q2
@@ -132,7 +157,8 @@ p1 ~~ q1 #p1 and q1 covariance
 p2 ~~ q2 #p2 and q2 covariance
 p3 ~~ q3 #p2 and q2 covariance'
 
-fit <- lavaan(riclpmModel, data = Demo.growth,
+fit <- lavaan(riclpmModel, data = antiread,
+              missing = 'ML', #for the missing data!
               int.ov.free = F,
               int.lv.free = F,
               auto.fix.first = F,
@@ -140,9 +166,150 @@ fit <- lavaan(riclpmModel, data = Demo.growth,
               auto.cov.lv.x = F,
               auto.cov.y = F,
               auto.var = F)
-summary(fit)
+summary(fit, standardized = T)
 ```
 
-I'm not sure why some variances are negative, except that this is probably an artificial data set. If you try this on your own real data and get the same problem, please let me know.
+## Comparting fits
+
+
+### RI-CLPM v CLPM
+
+Because the traditional CLPM is nested in the RI-CLPM, we can compare model fit. The correct reference distribution for this comparison is $\Chi^2$ but, as Hamaker and colleagues say 
+
+>However, we can make use of the fact that the regular chi-square difference test is conservative in this context, meaning that, if it is significant, we are certain that the correct (i.e., chi-bar-square difference) test will be significant too. (p. 105)
+
+We estimate the traditional CLPM by setting the variance and covariance of $\kappa$ and $\omega$ to 0.
+
+```{r CLPM}
+clpmModel <- #yes, "Model" is redundant
+'
+#Note, the data contain x1-3 and y1-3
+#Latent mean Structure with intercepts
+
+kappa =~ 1*x1 + 1*x2 + 1*x3
+omega =~ 1*y1 + 1*y2 + 1*y3
+
+x1 ~ mu1*1 #intercepts
+x2 ~ mu2*1
+x3 ~ mu3*1
+y1 ~ pi1*1
+y2 ~ pi2*1
+y3 ~ pi3*1
+
+kappa ~~ 0*kappa #variance nope
+omega ~~ 0*omega #variance nope
+kappa ~~ 0*omega #covariance not even
+
+#laten vars for AR and cross-lagged effects
+p1 =~ 1*x1 #each factor loading set to 1
+p2 =~ 1*x2
+p3 =~ 1*x3
+q1 =~ 1*y1
+q2 =~ 1*y2
+q3 =~ 1*y3
+
+#constrain autoregression and cross lagged effects to be the same across both lags.
+p3 ~ alpha3*p2 + beta3*q2
+p2 ~ alpha2*p1 + beta2*q1
+
+q3 ~ delta3*q2 + gamma3*p2
+q2 ~ delta2*q1 + gamma2*p1
+
+p1 ~~ p1 #variance
+p2 ~~ u2*p2
+p3 ~~ u3*p3
+q1 ~~ q1 #variance
+q2 ~~ v2*q2
+q3 ~~ v3*q3
+
+p1 ~~ q1 #p1 and q1 covariance
+p2 ~~ q2 #p2 and q2 covariance
+p3 ~~ q3 #p2 and q2 covariance'
+
+fitCLPM <- lavaan(clpmModel, data = antiread,
+              missing = 'ML', #for the missing data!
+              int.ov.free = F,
+              int.lv.free = F,
+              auto.fix.first = F,
+              auto.fix.single = F,
+              auto.cov.lv.x = F,
+              auto.cov.y = F,
+              auto.var = F)
+
+anova(fit, fitCLPM)
+
+summary(fitCLPM, standardize = T)
+```
+
+It fits much worse, with no model comparison statistic favoring the CLPM (the BIC advantage of 1 point is negligible). We can print out the standardized estimates to compare to the unconstrained RI-CLPM above.
+
+### Adding constraints to RI-CLPM
+
+For parsimony, I usually try to constraint my autoregressive and cross-lagged paths to be the same across intervals. Oh, and residuals too. I'll do this in the following code and then check the fit agains the unconstrained model. To do this, all I have to do is make sure the paths have the same name, like `alpha` instead of `alpha2` and `alpha3`.
+
+```{r constrained}
+riclpmModelConstrainedARCL <- 
+'
+#Note, the data contain x1-3 and y1-3
+#Latent mean Structure with intercepts
+
+kappa =~ 1*x1 + 1*x2 + 1*x3
+omega =~ 1*y1 + 1*y2 + 1*y3
+
+x1 ~ mu1*1 #intercepts
+x2 ~ mu2*1
+x3 ~ mu3*1
+y1 ~ pi1*1
+y2 ~ pi2*1
+y3 ~ pi3*1
+
+kappa ~~ kappa #variance
+omega ~~ omega #variance
+kappa ~~ omega #covariance
+
+#laten vars for AR and cross-lagged effects
+p1 =~ 1*x1 #each factor loading set to 1
+p2 =~ 1*x2
+p3 =~ 1*x3
+q1 =~ 1*y1
+q2 =~ 1*y2
+q3 =~ 1*y3
+
+#constrain autoregression and cross lagged effects to be the same across both lags.
+p3 ~ alpha*p2 + beta*q2
+p2 ~ alpha*p1 + beta*q1
+
+q3 ~ delta*q2 + gamma*p2
+q2 ~ delta*q1 + gamma*p1
+
+p1 ~~ p1 #variance
+p2 ~~ u*p2
+p3 ~~ u*p3
+q1 ~~ q1 #variance
+q2 ~~ v*q2
+q3 ~~ v*q3
+
+p1 ~~ q1 #p1 and q1 covariance
+p2 ~~ uv*q2 #p2 and q2 covariance should also be constrained to be the same as
+p3 ~~ uv*q3 #p3 and q3 covariance'
+
+fitConstrainedARCL <- lavaan(riclpmModelConstrainedARCL, data = antiread,
+              missing = 'ML', #for the missing data!
+              int.ov.free = F,
+              int.lv.free = F,
+              auto.fix.first = F,
+              auto.fix.single = F,
+              auto.cov.lv.x = F,
+              auto.cov.y = F,
+              auto.var = F)
+
+anova(fit, fitConstrainedARCL)
+```
+
+Well, according to AIC and the $\Chi^2$ test, the constrained model fits worse. But BIC loves the constrained model because it hates parameters. Interpretive ease hates parameters too (most of the time), so let's look at the summary for our simplified model.
+
+```{r summaryconstrained}
+summary(fitConstrainedARCL, standardized = T)
+```
 
 # References
