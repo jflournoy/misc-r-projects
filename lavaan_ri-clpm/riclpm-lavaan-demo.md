@@ -1,85 +1,48 @@
--   [Critique of cross-lagged pannel
-    models](#critique-of-cross-lagged-pannel-models)
+-   [Critique of cross-lagged pannel models](#critique-of-cross-lagged-pannel-models)
 -   [RI-CLPM](#ri-clpm)
 -   [Implemmenting the RI-CLPM in R](#implemmenting-the-ri-clpm-in-r)
     -   [Some data](#some-data)
     -   [Fitting a RI-CLPM](#fitting-a-ri-clpm)
     -   [Comparting fits](#comparting-fits)
         -   [RI-CLPM v CLPM](#ri-clpm-v-clpm)
-        -   [Adding constraints to
-            RI-CLPM](#adding-constraints-to-ri-clpm)
+        -   [Adding constraints to RI-CLPM](#adding-constraints-to-ri-clpm)
 -   [References](#references)
 
 This document explains why and how to run a RI-CLPM in R.
 
-    knitr::opts_chunk$set(echo = TRUE)
+``` r
+knitr::opts_chunk$set(echo = TRUE)
 
-    #if you need to install anything, uncomment the below install lines for now
-    #install.packages('lavaan')
-    #install.packages('tidyverse')
-    require(lavaan)
-    require(tidyverse)
+#if you need to install anything, uncomment the below install lines for now
+#install.packages('lavaan')
+#install.packages('tidyverse')
+require(lavaan)
+require(tidyverse)
+```
 
 Critique of cross-lagged pannel models
 ======================================
 
-This post summarizes critiques of the traditional cross-lagged panel
-model (CLPM), and an improved model by Hamaker, Kuiper, and Grasman
-(2015).
+This post summarizes critiques of the traditional cross-lagged panel model (CLPM), and an improved model by Hamaker, Kuiper, and Grasman (2015).
 
-The primary point Hamaker and colleagues make regarding the CLPM is that
-it assumes that there are "no trait-like individual differences that
-endure." That is, looking at the structure of a CLPM it is clear that
-individual-level stability must be accounted for entirely by the
-auto-regressive path between waves. As they put it, it imposes an
-assumption that there is no between-subject variance of time-invariant,
-trait-like stability, but only temporal stability, wave to wave, of
-subjects around the mean score for any particular wave.
+The primary point Hamaker and colleagues make regarding the CLPM is that it assumes that there are "no trait-like individual differences that endure." That is, looking at the structure of a CLPM it is clear that individual-level stability must be accounted for entirely by the auto-regressive path between waves. As they put it, it imposes an assumption that there is no between-subject variance of time-invariant, trait-like stability, but only temporal stability, wave to wave, of subjects around the mean score for any particular wave.
 
 RI-CLPM
 =======
 
-A key insight of the paper is that "we need to separate the
-*within-person level* from the *between-person level*" (p. 104). The
-model they propose, the Random Intercept CLPM (RI-CLPM) separates each
-person's score on a variable at each wave into the group mean for that
-wave (*μ*<sub>*t*</sub>, *π*<sub>*t*</sub>), an individuals stable score
-over all waves (the random intercept;
-*κ*<sub>*i*</sub>, *ω*<sub>*i*</sub>) and then an individual level
-deviation at each wave from the score expected by adding the
-group-wave-mean and individual trait
-(*p*<sub>*i**t*</sub>, *q*<sub>*i**t*</sub>).
+A key insight of the paper is that "we need to separate the *within-person level* from the *between-person level*" (p. 104). The model they propose, the Random Intercept CLPM (RI-CLPM) separates each person's score on a variable at each wave into the group mean for that wave (*μ*<sub>*t*</sub>, *π*<sub>*t*</sub>), an individuals stable score over all waves (the random intercept; *κ*<sub>*i*</sub>, *ω*<sub>*i*</sub>) and then an individual level deviation at each wave from the score expected by adding the group-wave-mean and individual trait (*p*<sub>*i**t*</sub>, *q*<sub>*i**t*</sub>).
 
 The model looks like this:
 
 ![RI-CLPM Diagram](hamaker-diagram.png)
 
-Effectively, now, the paths *α*<sub>*t*</sub> (or *δ*<sub>*t*</sub>)
-between *p*<sub>*i**t*</sub> (or *q*<sub>*i**t*</sub>) and
-*p*<sub>*i*(*t* + 1)</sub> (or *q*<sub>*i*(*t* + 1)</sub>) no longer
-capture rank-order stability of individuals, but rather a within-person
-carry-over effect.
+Effectively, now, the paths *α*<sub>*t*</sub> (or *δ*<sub>*t*</sub>) between *p*<sub>*i**t*</sub> (or *q*<sub>*i**t*</sub>) and *p*<sub>*i*(*t* + 1)</sub> (or *q*<sub>*i*(*t* + 1)</sub>) no longer capture rank-order stability of individuals, but rather a within-person carry-over effect.
 
-> If it is positive, it implies that occasions on which a person scored
-> above his or her expected score are likely to be followed by occasions
-> on which he or she still scores above the expected score again, and
-> vice versa. (p. 104)
+> If it is positive, it implies that occasions on which a person scored above his or her expected score are likely to be followed by occasions on which he or she still scores above the expected score again, and vice versa. (p. 104)
 
-More importantly, since *κ* and *ω* separate out individual-level
-stability, the cross-lagged paths *β*<sub>*t*</sub> and
-*γ*<sub>*t*</sub> are now straightforward to interpret as the within
-person of effect of one variable on the subsequent measurement of a
-second variable. This interpretive boost is allowed now because, for
-example, *β*<sub>*t*</sub> is the estimate of the additional explanatory
-power of *deviations from trait-stable levels* on variable
-*y*<sub>*t*</sub> on the *deviations* of the observed variable
-*x*<sub>*t* + 1</sub> from the group mean and individual trait
-(*μ*<sub>*t* + 1</sub> + *κ*<sub>*i*</sub>) after accounting for the
-expected within-person carry-over effect, *α*<sub>*t*</sub>.
+More importantly, since *κ* and *ω* separate out individual-level stability, the cross-lagged paths *β*<sub>*t*</sub> and *γ*<sub>*t*</sub> are now straightforward to interpret as the within person of effect of one variable on the subsequent measurement of a second variable. This interpretive boost is allowed now because, for example, *β*<sub>*t*</sub> is the estimate of the additional explanatory power of *deviations from trait-stable levels* on variable *y*<sub>*t*</sub> on the *deviations* of the observed variable *x*<sub>*t* + 1</sub> from the group mean and individual trait (*μ*<sub>*t* + 1</sub> + *κ*<sub>*i*</sub>) after accounting for the expected within-person carry-over effect, *α*<sub>*t*</sub>.
 
-See the paper (Figure 2) for a demonstration of how terribly traditional
-CLPM performs when you have a data generating process that matches the
-RI-CLPM -- that is, when you have stable individual differences.
+See the paper (Figure 2) for a demonstration of how terribly traditional CLPM performs when you have a data generating process that matches the RI-CLPM -- that is, when you have stable individual differences.
 
 Implemmenting the RI-CLPM in R
 ==============================
@@ -87,28 +50,24 @@ Implemmenting the RI-CLPM in R
 Some data
 ---------
 
-First, we need some data. I'm using a data set presented on at a methods
-symposium at SRCD in 1997. Supporting documentation can be found [in
-this pdf](srcdmeth.pdf). Data and code for importing it was helpfully
-provided by [Sanjay Srivastava](http://twitter.com/hardsci).
+First, we need some data. I'm using a data set presented on at a methods symposium at SRCD in 1997. Supporting documentation can be found [in this pdf](srcdmeth.pdf). Data and code for importing it was helpfully provided by [Sanjay Srivastava](http://twitter.com/hardsci).
 
-The variables we're considering are a measure of antisocial behavior
-(`anti`) and reading recognition (`read`). See the docs for descriptions
-of the other variables. And for the purpose of the model fitting below,
-`x <- anit` and `y <- read`.
+The variables we're considering are a measure of antisocial behavior (`anti`) and reading recognition (`read`). See the docs for descriptions of the other variables. And for the purpose of the model fitting below, `x <- anit` and `y <- read`.
 
-    antiread <- read.table("srcddata.dat",
-                           na.strings = c("999.00"),
-                           col.names = c("anti1", "anti2", "anti3", "anti4", 
-                                         "read1", "read2", "read3", "read4",
-                                         "gen", "momage", "kidage", "homecog", 
-                                         "homeemo", "id")
-    ) %>%
-      rename(x1 = anti1, x2 = anti2, x3 = anti3, x4 = anti4,
-             y1 = read1, y2 = read2, y3 = read3, y4 = read4) %>%
-      select(matches('[xy][1-4]'))
+``` r
+antiread <- read.table("srcddata.dat",
+                       na.strings = c("999.00"),
+                       col.names = c("anti1", "anti2", "anti3", "anti4", 
+                                     "read1", "read2", "read3", "read4",
+                                     "gen", "momage", "kidage", "homecog", 
+                                     "homeemo", "id")
+) %>%
+  rename(x1 = anti1, x2 = anti2, x3 = anti3, x4 = anti4,
+         y1 = read1, y2 = read2, y3 = read3, y4 = read4) %>%
+  select(matches('[xy][1-4]'))
 
-    knitr::kable(summary(antiread), format = 'markdown')
+knitr::kable(summary(antiread), format = 'markdown')
+```
 
 <table style="width:100%;">
 <colgroup>
@@ -216,28 +175,32 @@ of the other variables. And for the purpose of the model fitting below,
 </tbody>
 </table>
 
-    antiread %>%
-      mutate(pid = 1:n()) %>%
-      gather(key, value, -pid) %>%
-      extract(col = key, into = c('var', 'wave'), regex = '(\\w)(\\d)') %>%
-      ggplot(aes(x = value)) +
-      geom_density(alpha = 1) + 
-      facet_wrap(~var, nrow = 1, scales = 'free') + 
-      theme_classic()
+``` r
+antiread %>%
+  mutate(pid = 1:n()) %>%
+  gather(key, value, -pid) %>%
+  extract(col = key, into = c('var', 'wave'), regex = '(\\w)(\\d)') %>%
+  ggplot(aes(x = value)) +
+  geom_density(alpha = 1) + 
+  facet_wrap(~var, nrow = 1, scales = 'free') + 
+  theme_classic()
+```
 
     ## Warning: Removed 545 rows containing non-finite values (stat_density).
 
-![](riclpm-lavaan-demo_files/figure-markdown_strict/lavaan%20demo%20growth%20data-1.png)
+![](riclpm-lavaan-demo_files/figure-markdown_github/lavaan%20demo%20growth%20data-1.png)
 
-    antiread %>%
-      mutate(pid = 1:n()) %>%
-      gather(key, value, -pid) %>%
-      extract(col = key, into = c('var', 'wave'), regex = '(\\w)(\\d)') %>%
-      ggplot(aes(x = wave, y = value, color = var, group = var)) +
-      geom_point(position = position_jitter(w = .2), alpha = .1) +
-      geom_line(stat = 'identity', aes(group = interaction(var, pid)), alpha = .04) + 
-      geom_line(stat = 'smooth', method = 'lm', size = 1) + 
-      theme_classic()
+``` r
+antiread %>%
+  mutate(pid = 1:n()) %>%
+  gather(key, value, -pid) %>%
+  extract(col = key, into = c('var', 'wave'), regex = '(\\w)(\\d)') %>%
+  ggplot(aes(x = wave, y = value, color = var, group = var)) +
+  geom_point(position = position_jitter(w = .2), alpha = .1) +
+  geom_line(stat = 'identity', aes(group = interaction(var, pid)), alpha = .04) + 
+  geom_line(stat = 'smooth', method = 'lm', size = 1) + 
+  theme_classic()
+```
 
     ## Warning: Removed 545 rows containing non-finite values (stat_smooth).
 
@@ -245,79 +208,72 @@ of the other variables. And for the purpose of the model fitting below,
 
     ## Warning: Removed 463 rows containing missing values (geom_path).
 
-![](riclpm-lavaan-demo_files/figure-markdown_strict/lavaan%20demo%20growth%20data-2.png)
+![](riclpm-lavaan-demo_files/figure-markdown_github/lavaan%20demo%20growth%20data-2.png)
 
 Fitting a RI-CLPM
 -----------------
 
-In the below `lavaan` code, I'll be using the notation from the diagram.
-I am explicitly specifying everything in the diagram, which is why in
-the call to `lavaan` I set a bunch of `auto` options to false. This is
-because often lavaan will try to automatically estimate things that you
-don't usually write out but often want estimated, like residuals.
-Because this model is unorthodox, I want to be as explicit as possible.
+In the below `lavaan` code, I'll be using the notation from the diagram. I am explicitly specifying everything in the diagram, which is why in the call to `lavaan` I set a bunch of `auto` options to false. This is because often lavaan will try to automatically estimate things that you don't usually write out but often want estimated, like residuals. Because this model is unorthodox, I want to be as explicit as possible.
 
-The lavaan code below uses syntax that can be found in their help docs
-for the [basic stuff](http://lavaan.ugent.be/tutorial/syntax1.html) as
-well as the more
-[advanced](http://lavaan.ugent.be/tutorial/syntax2.html) labeling and
-constraining.
+The lavaan code below uses syntax that can be found in their help docs for the [basic stuff](http://lavaan.ugent.be/tutorial/syntax1.html) as well as the more [advanced](http://lavaan.ugent.be/tutorial/syntax2.html) labeling and constraining.
 
-    riclpmModel <- 
-    '
-    #Note, the data contain x1-3 and y1-3
-    #Latent mean Structure with intercepts
+``` r
+riclpmModel <- 
+'
+#Note, the data contain x1-3 and y1-3
+#Latent mean Structure with intercepts
 
-    kappa =~ 1*x1 + 1*x2 + 1*x3
-    omega =~ 1*y1 + 1*y2 + 1*y3
+kappa =~ 1*x1 + 1*x2 + 1*x3
+omega =~ 1*y1 + 1*y2 + 1*y3
 
-    x1 ~ mu1*1 #intercepts
-    x2 ~ mu2*1
-    x3 ~ mu3*1
-    y1 ~ pi1*1
-    y2 ~ pi2*1
-    y3 ~ pi3*1
+x1 ~ mu1*1 #intercepts
+x2 ~ mu2*1
+x3 ~ mu3*1
+y1 ~ pi1*1
+y2 ~ pi2*1
+y3 ~ pi3*1
 
-    kappa ~~ kappa #variance
-    omega ~~ omega #variance
-    kappa ~~ omega #covariance
+kappa ~~ kappa #variance
+omega ~~ omega #variance
+kappa ~~ omega #covariance
 
-    #laten vars for AR and cross-lagged effects
-    p1 =~ 1*x1 #each factor loading set to 1
-    p2 =~ 1*x2
-    p3 =~ 1*x3
-    q1 =~ 1*y1
-    q2 =~ 1*y2
-    q3 =~ 1*y3
+#laten vars for AR and cross-lagged effects
+p1 =~ 1*x1 #each factor loading set to 1
+p2 =~ 1*x2
+p3 =~ 1*x3
+q1 =~ 1*y1
+q2 =~ 1*y2
+q3 =~ 1*y3
 
-    #constrain autoregression and cross lagged effects to be the same across both lags.
-    p3 ~ alpha3*p2 + beta3*q2
-    p2 ~ alpha2*p1 + beta2*q1
+#constrain autoregression and cross lagged effects to be the same across both lags.
+p3 ~ alpha3*p2 + beta3*q2
+p2 ~ alpha2*p1 + beta2*q1
 
-    q3 ~ delta3*q2 + gamma3*p2
-    q2 ~ delta2*q1 + gamma2*p1
+q3 ~ delta3*q2 + gamma3*p2
+q2 ~ delta2*q1 + gamma2*p1
 
-    p1 ~~ p1 #variance
-    p2 ~~ u2*p2
-    p3 ~~ u3*p3
-    q1 ~~ q1 #variance
-    q2 ~~ v2*q2
-    q3 ~~ v3*q3
+p1 ~~ p1 #variance
+p2 ~~ u2*p2
+p3 ~~ u3*p3
+q1 ~~ q1 #variance
+q2 ~~ v2*q2
+q3 ~~ v3*q3
 
-    p1 ~~ q1 #p1 and q1 covariance
-    p2 ~~ q2 #p2 and q2 covariance
-    p3 ~~ q3 #p2 and q2 covariance'
+p1 ~~ q1 #p1 and q1 covariance
+p2 ~~ q2 #p2 and q2 covariance
+p3 ~~ q3 #p2 and q2 covariance'
 
-    fit <- lavaan(riclpmModel, data = antiread,
-                  missing = 'ML', #for the missing data!
-                  int.ov.free = F,
-                  int.lv.free = F,
-                  auto.fix.first = F,
-                  auto.fix.single = F,
-                  auto.cov.lv.x = F,
-                  auto.cov.y = F,
-                  auto.var = F)
-    summary(fit, standardized = T)
+fit <- lavaan(riclpmModel, data = antiread,
+              missing = 'ML', #for the missing data!
+              int.ov.free = F,
+              int.lv.free = F,
+              auto.fix.first = F,
+              auto.fix.single = F,
+              auto.cov.lv.x = F,
+              auto.cov.y = F,
+              auto.var = F)
+summary(fit, standardized = T)
+```
 
     ## lavaan (0.5-23.1097) converged normally after  83 iterations
     ## 
@@ -423,74 +379,70 @@ Comparting fits
 
 ### RI-CLPM v CLPM
 
-Because the traditional CLPM is nested in the RI-CLPM, we can compare
-model fit. The correct reference distribution for this comparison is
-*χ*<sup>2</sup> but, as Hamaker and colleagues say
+Because the traditional CLPM is nested in the RI-CLPM, we can compare model fit. The correct reference distribution for this comparison is *χ*<sup>2</sup> but, as Hamaker and colleagues say
 
-> However, we can make use of the fact that the regular chi-square
-> difference test is conservative in this context, meaning that, if it
-> is significant, we are certain that the correct (i.e., chi-bar-square
-> difference) test will be significant too. (p. 105)
+> However, we can make use of the fact that the regular chi-square difference test is conservative in this context, meaning that, if it is significant, we are certain that the correct (i.e., chi-bar-square difference) test will be significant too. (p. 105)
 
-We estimate the traditional CLPM by setting the variance and covariance
-of *κ* and *ω* to 0.
+We estimate the traditional CLPM by setting the variance and covariance of *κ* and *ω* to 0.
 
-    clpmModel <- #yes, "Model" is redundant
-    '
-    #Note, the data contain x1-3 and y1-3
-    #Latent mean Structure with intercepts
+``` r
+clpmModel <- #yes, "Model" is redundant
+'
+#Note, the data contain x1-3 and y1-3
+#Latent mean Structure with intercepts
 
-    kappa =~ 1*x1 + 1*x2 + 1*x3
-    omega =~ 1*y1 + 1*y2 + 1*y3
+kappa =~ 1*x1 + 1*x2 + 1*x3
+omega =~ 1*y1 + 1*y2 + 1*y3
 
-    x1 ~ mu1*1 #intercepts
-    x2 ~ mu2*1
-    x3 ~ mu3*1
-    y1 ~ pi1*1
-    y2 ~ pi2*1
-    y3 ~ pi3*1
+x1 ~ mu1*1 #intercepts
+x2 ~ mu2*1
+x3 ~ mu3*1
+y1 ~ pi1*1
+y2 ~ pi2*1
+y3 ~ pi3*1
 
-    kappa ~~ 0*kappa #variance nope
-    omega ~~ 0*omega #variance nope
-    kappa ~~ 0*omega #covariance not even
+kappa ~~ 0*kappa #variance nope
+omega ~~ 0*omega #variance nope
+kappa ~~ 0*omega #covariance not even
 
-    #laten vars for AR and cross-lagged effects
-    p1 =~ 1*x1 #each factor loading set to 1
-    p2 =~ 1*x2
-    p3 =~ 1*x3
-    q1 =~ 1*y1
-    q2 =~ 1*y2
-    q3 =~ 1*y3
+#laten vars for AR and cross-lagged effects
+p1 =~ 1*x1 #each factor loading set to 1
+p2 =~ 1*x2
+p3 =~ 1*x3
+q1 =~ 1*y1
+q2 =~ 1*y2
+q3 =~ 1*y3
 
-    #constrain autoregression and cross lagged effects to be the same across both lags.
-    p3 ~ alpha3*p2 + beta3*q2
-    p2 ~ alpha2*p1 + beta2*q1
+#constrain autoregression and cross lagged effects to be the same across both lags.
+p3 ~ alpha3*p2 + beta3*q2
+p2 ~ alpha2*p1 + beta2*q1
 
-    q3 ~ delta3*q2 + gamma3*p2
-    q2 ~ delta2*q1 + gamma2*p1
+q3 ~ delta3*q2 + gamma3*p2
+q2 ~ delta2*q1 + gamma2*p1
 
-    p1 ~~ p1 #variance
-    p2 ~~ u2*p2
-    p3 ~~ u3*p3
-    q1 ~~ q1 #variance
-    q2 ~~ v2*q2
-    q3 ~~ v3*q3
+p1 ~~ p1 #variance
+p2 ~~ u2*p2
+p3 ~~ u3*p3
+q1 ~~ q1 #variance
+q2 ~~ v2*q2
+q3 ~~ v3*q3
 
-    p1 ~~ q1 #p1 and q1 covariance
-    p2 ~~ q2 #p2 and q2 covariance
-    p3 ~~ q3 #p2 and q2 covariance'
+p1 ~~ q1 #p1 and q1 covariance
+p2 ~~ q2 #p2 and q2 covariance
+p3 ~~ q3 #p2 and q2 covariance'
 
-    fitCLPM <- lavaan(clpmModel, data = antiread,
-                  missing = 'ML', #for the missing data!
-                  int.ov.free = F,
-                  int.lv.free = F,
-                  auto.fix.first = F,
-                  auto.fix.single = F,
-                  auto.cov.lv.x = F,
-                  auto.cov.y = F,
-                  auto.var = F)
+fitCLPM <- lavaan(clpmModel, data = antiread,
+              missing = 'ML', #for the missing data!
+              int.ov.free = F,
+              int.lv.free = F,
+              auto.fix.first = F,
+              auto.fix.single = F,
+              auto.cov.lv.x = F,
+              auto.cov.y = F,
+              auto.var = F)
 
-    anova(fit, fitCLPM)
+anova(fit, fitCLPM)
+```
 
     ## Chi Square Difference Test
     ## 
@@ -500,11 +452,11 @@ of *κ* and *ω* to 0.
     ## ---
     ## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
 
-It fits much worse, with no model comparison statistic favoring the CLPM
-(the BIC advantage of 1 point is negligible). We can print out the
-standardized estimates to compare to the unconstrained RI-CLPM above.
+It fits much worse, with no model comparison statistic favoring the CLPM (the BIC advantage of 1 point is negligible). We can print out the standardized estimates to compare to the unconstrained RI-CLPM above.
 
-    summary(fitCLPM, standardize = T)
+``` r
+summary(fitCLPM, standardize = T)
+```
 
     ## lavaan (0.5-23.1097) converged normally after  47 iterations
     ## 
@@ -607,68 +559,66 @@ standardized estimates to compare to the unconstrained RI-CLPM above.
 
 ### Adding constraints to RI-CLPM
 
-For parsimony, I usually try to constraint my autoregressive and
-cross-lagged paths to be the same across intervals. Oh, and residuals
-too. I'll do this in the following code and then check the fit against
-the unconstrained model. To do this, all I have to do is make sure the
-paths have the same name, like `alpha` instead of `alpha2` and `alpha3`.
+For parsimony, I usually try to constraint my autoregressive and cross-lagged paths to be the same across intervals. Oh, and residuals too. I'll do this in the following code and then check the fit against the unconstrained model. To do this, all I have to do is make sure the paths have the same name, like `alpha` instead of `alpha2` and `alpha3`.
 
-    riclpmModelConstrainedARCL <- 
-    '
-    #Note, the data contain x1-3 and y1-3
-    #Latent mean Structure with intercepts
+``` r
+riclpmModelConstrainedARCL <- 
+'
+#Note, the data contain x1-3 and y1-3
+#Latent mean Structure with intercepts
 
-    kappa =~ 1*x1 + 1*x2 + 1*x3
-    omega =~ 1*y1 + 1*y2 + 1*y3
+kappa =~ 1*x1 + 1*x2 + 1*x3
+omega =~ 1*y1 + 1*y2 + 1*y3
 
-    x1 ~ mu1*1 #intercepts
-    x2 ~ mu2*1
-    x3 ~ mu3*1
-    y1 ~ pi1*1
-    y2 ~ pi2*1
-    y3 ~ pi3*1
+x1 ~ mu1*1 #intercepts
+x2 ~ mu2*1
+x3 ~ mu3*1
+y1 ~ pi1*1
+y2 ~ pi2*1
+y3 ~ pi3*1
 
-    kappa ~~ kappa #variance
-    omega ~~ omega #variance
-    kappa ~~ omega #covariance
+kappa ~~ kappa #variance
+omega ~~ omega #variance
+kappa ~~ omega #covariance
 
-    #laten vars for AR and cross-lagged effects
-    p1 =~ 1*x1 #each factor loading set to 1
-    p2 =~ 1*x2
-    p3 =~ 1*x3
-    q1 =~ 1*y1
-    q2 =~ 1*y2
-    q3 =~ 1*y3
+#laten vars for AR and cross-lagged effects
+p1 =~ 1*x1 #each factor loading set to 1
+p2 =~ 1*x2
+p3 =~ 1*x3
+q1 =~ 1*y1
+q2 =~ 1*y2
+q3 =~ 1*y3
 
-    #constrain autoregression and cross lagged effects to be the same across both lags.
-    p3 ~ alpha*p2 + beta*q2
-    p2 ~ alpha*p1 + beta*q1
+#constrain autoregression and cross lagged effects to be the same across both lags.
+p3 ~ alpha*p2 + beta*q2
+p2 ~ alpha*p1 + beta*q1
 
-    q3 ~ delta*q2 + gamma*p2
-    q2 ~ delta*q1 + gamma*p1
+q3 ~ delta*q2 + gamma*p2
+q2 ~ delta*q1 + gamma*p1
 
-    p1 ~~ p1 #variance
-    p2 ~~ u*p2
-    p3 ~~ u*p3
-    q1 ~~ q1 #variance
-    q2 ~~ v*q2
-    q3 ~~ v*q3
+p1 ~~ p1 #variance
+p2 ~~ u*p2
+p3 ~~ u*p3
+q1 ~~ q1 #variance
+q2 ~~ v*q2
+q3 ~~ v*q3
 
-    p1 ~~ q1 #p1 and q1 covariance
-    p2 ~~ uv*q2 #p2 and q2 covariance should also be constrained to be the same as
-    p3 ~~ uv*q3 #p3 and q3 covariance'
+p1 ~~ q1 #p1 and q1 covariance
+p2 ~~ uv*q2 #p2 and q2 covariance should also be constrained to be the same as
+p3 ~~ uv*q3 #p3 and q3 covariance'
 
-    fitConstrainedARCL <- lavaan(riclpmModelConstrainedARCL, data = antiread,
-                  missing = 'ML', #for the missing data!
-                  int.ov.free = F,
-                  int.lv.free = F,
-                  auto.fix.first = F,
-                  auto.fix.single = F,
-                  auto.cov.lv.x = F,
-                  auto.cov.y = F,
-                  auto.var = F)
+fitConstrainedARCL <- lavaan(riclpmModelConstrainedARCL, data = antiread,
+              missing = 'ML', #for the missing data!
+              int.ov.free = F,
+              int.lv.free = F,
+              auto.fix.first = F,
+              auto.fix.single = F,
+              auto.cov.lv.x = F,
+              auto.cov.y = F,
+              auto.var = F)
 
-    anova(fit, fitConstrainedARCL)
+anova(fit, fitConstrainedARCL)
+```
 
     ## Chi Square Difference Test
     ## 
@@ -681,12 +631,11 @@ paths have the same name, like `alpha` instead of `alpha2` and `alpha3`.
     ## ---
     ## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
 
-Well, according to AIC and the *χ*<sup>2</sup> test, the constrained
-model fits worse. But BIC loves the constrained model because it hates
-parameters. Interpretive ease hates parameters too (most of the time),
-so let's look at the summary for our simplified model.
+Well, according to AIC and the *χ*<sup>2</sup> test, the constrained model fits worse. But BIC loves the constrained model because it hates parameters. Interpretive ease hates parameters too (most of the time), so let's look at the summary for our simplified model.
 
-    summary(fitConstrainedARCL, standardized = T)
+``` r
+summary(fitConstrainedARCL, standardized = T)
+```
 
     ## lavaan (0.5-23.1097) converged normally after  78 iterations
     ## 
@@ -790,6 +739,4 @@ so let's look at the summary for our simplified model.
 References
 ==========
 
-Hamaker, Ellen L., Rebecca M. Kuiper, and Raoul P. P. P. Grasman. 2015.
-“A Critique of the Cross-Lagged Panel Model.” *Psychological Methods* 20
-(1): 102–16. doi:[10.1037/a0038889](https://doi.org/10.1037/a0038889).
+Hamaker, Ellen L., Rebecca M. Kuiper, and Raoul P. P. P. Grasman. 2015. “A Critique of the Cross-Lagged Panel Model.” *Psychological Methods* 20 (1): 102–16. doi:[10.1037/a0038889](https://doi.org/10.1037/a0038889).

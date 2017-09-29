@@ -5,6 +5,7 @@ date: "September 28, 2017"
 output: 
   md_document:
     toc: true
+    variant: markdown_github
 references:
 - id: Hamakercritiquecrosslaggedpanel2015
   type: article-journal
