@@ -10,6 +10,10 @@
             RI-CLPM](#adding-constraints-to-ri-clpm)
 -   [References](#references)
 
+This document explains why and how to run a RI-CLPM in R.
+
+    knitr::opts_chunk$set(echo = TRUE)
+
     #if you need to install anything, uncomment the below install lines for now
     #install.packages('lavaan')
     #install.packages('tidyverse')

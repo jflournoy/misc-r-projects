@@ -28,11 +28,11 @@ references:
       - - 2015
 ---
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
-```
+This document explains why and how to run a RI-CLPM in R.
 
 ```{r packages, message = F, warning = F}
+knitr::opts_chunk$set(echo = TRUE)
+
 #if you need to install anything, uncomment the below install lines for now
 #install.packages('lavaan')
 #install.packages('tidyverse')
