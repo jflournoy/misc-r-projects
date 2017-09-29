@@ -174,7 +174,7 @@ summary(fit, standardized = T)
 
 ### RI-CLPM v CLPM
 
-Because the traditional CLPM is nested in the RI-CLPM, we can compare model fit. The correct reference distribution for this comparison is $\Chi^2$ but, as Hamaker and colleagues say 
+Because the traditional CLPM is nested in the RI-CLPM, we can compare model fit. The correct reference distribution for this comparison is $\chi^2$ but, as Hamaker and colleagues say 
 
 >However, we can make use of the fact that the regular chi-square difference test is conservative in this context, meaning that, if it is significant, we are certain that the correct (i.e., chi-bar-square difference) test will be significant too. (p. 105)
 
@@ -306,7 +306,7 @@ fitConstrainedARCL <- lavaan(riclpmModelConstrainedARCL, data = antiread,
 anova(fit, fitConstrainedARCL)
 ```
 
-Well, according to AIC and the $\Chi^2$ test, the constrained model fits worse. But BIC loves the constrained model because it hates parameters. Interpretive ease hates parameters too (most of the time), so let's look at the summary for our simplified model.
+Well, according to AIC and the $\chi^2$ test, the constrained model fits worse. But BIC loves the constrained model because it hates parameters. Interpretive ease hates parameters too (most of the time), so let's look at the summary for our simplified model.
 
 ```{r summaryconstrained}
 summary(fitConstrainedARCL, standardized = T)

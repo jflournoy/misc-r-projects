@@ -421,7 +421,7 @@ Comparting fits
 
 Because the traditional CLPM is nested in the RI-CLPM, we can compare
 model fit. The correct reference distribution for this comparison is
-$\\Chi^2$ but, as Hamaker and colleagues say
+*χ*<sup>2</sup> but, as Hamaker and colleagues say
 
 > However, we can make use of the fact that the regular chi-square
 > difference test is conservative in this context, meaning that, if it
@@ -677,8 +677,8 @@ paths have the same name, like `alpha` instead of `alpha2` and `alpha3`.
     ## ---
     ## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
 
-Well, according to AIC and the $\\Chi^2$ test, the constrained model
-fits worse. But BIC loves the constrained model because it hates
+Well, according to AIC and the *χ*<sup>2</sup> test, the constrained
+model fits worse. But BIC loves the constrained model because it hates
 parameters. Interpretive ease hates parameters too (most of the time),
 so let's look at the summary for our simplified model.
 
