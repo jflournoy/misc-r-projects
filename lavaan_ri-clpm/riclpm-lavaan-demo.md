@@ -496,6 +496,10 @@ of *κ* and *ω* to 0.
     ## ---
     ## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
 
+It fits much worse, with no model comparison statistic favoring the CLPM
+(the BIC advantage of 1 point is negligible). We can print out the
+standardized estimates to compare to the unconstrained RI-CLPM above.
+
     summary(fitCLPM, standardize = T)
 
     ## lavaan (0.5-23.1097) converged normally after  47 iterations
@@ -596,10 +600,6 @@ of *κ* and *ω* to 0.
     ##    .y1                0.000                               0.000    0.000
     ##    .y2                0.000                               0.000    0.000
     ##    .y3                0.000                               0.000    0.000
-
-It fits much worse, with no model comparison statistic favoring the CLPM
-(the BIC advantage of 1 point is negligible). We can print out the
-standardized estimates to compare to the unconstrained RI-CLPM above.
 
 ### Adding constraints to RI-CLPM
 

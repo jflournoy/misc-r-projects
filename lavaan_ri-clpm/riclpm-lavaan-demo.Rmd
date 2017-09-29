@@ -237,11 +237,13 @@ fitCLPM <- lavaan(clpmModel, data = antiread,
               auto.var = F)
 
 anova(fit, fitCLPM)
-
-summary(fitCLPM, standardize = T)
 ```
 
 It fits much worse, with no model comparison statistic favoring the CLPM (the BIC advantage of 1 point is negligible). We can print out the standardized estimates to compare to the unconstrained RI-CLPM above.
+
+```{r clpm_estimates}
+summary(fitCLPM, standardize = T)
+```
 
 ### Adding constraints to RI-CLPM
 
