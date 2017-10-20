@@ -29,7 +29,7 @@ references:
       - - 2015
 ---
 
-This document explains why and how to run a RI-CLPM in R.
+This document explains, briefly, why and how to run a RI-CLPM in R.
 
 ```{r packages, message = F, warning = F}
 knitr::opts_chunk$set(echo = TRUE)
@@ -57,7 +57,7 @@ The model looks like this:
 
 Effectively, now, the paths $\alpha_{t}$ (or $\delta_{t}$) between $p_{it}$ (or $q_{it}$) and $p_{i(t+1)}$ (or $q_{i(t+1)}$) no longer capture rank-order stability of individuals, but rather a within-person carry-over effect.
 
->If it is positive, it implies that occasions on which a person scored above his or her expected score are likely to be followed by occasions on which he or she still scores above the expected score again, and vice versa. (p. 104)
+>If it is positive, it implies that occasions on which a person scored above his or her expected score are likely to be followed by occasions on which he or she still scores above the expected score again, and conversely. (p. 104)
 
 More importantly, since $\kappa$ and $\omega$ separate out individual-level stability, the cross-lagged paths $\beta_{t}$ and $\gamma_{t}$ are now straightforward to interpret as the within person of effect of one variable on the subsequent measurement of a second variable. This interpretive boost is allowed now because, for example, $\beta_{t}$ is the estimate of the additional explanatory power of _deviations from trait-stable levels_ on variable $y_{t}$ on the _deviations_ of the observed variable $x_{t+1}$ from the group mean and individual trait ($\mu_{t+1} + \kappa_{i}$) after accounting for the expected within-person carry-over effect, $\alpha_{t}$. 
 
