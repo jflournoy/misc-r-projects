@@ -1,39 +1,47 @@
 ---
-title: "Hamaker et al. RI-CLPM"
+layout: post
+comments: true
+title: "A better cross-lagged panel model, from Hamaker et al. (2015)"
 author: "John Flournoy"
-date: "September 28, 2017"
+date: "October 20, 2017"
 output: 
   md_document:
     toc: true
-    variant: markdown_github
-references:
-- id: Hamakercritiquecrosslaggedpanel2015
-  type: article-journal
-  title: A critique of the cross-lagged panel model
-  container-title: Psychological Methods
-  page: 102-116
-  volume: '20'
-  issue: '1'
-  source: APA PsycNET
-  DOI: 10.1037/a0038889
-  ISSN: 1939-1463(Electronic);1082-989X(Print)
-  author:
-    - family: Hamaker
-      given: Ellen L.
-    - family: Kuiper
-      given: Rebecca M.
-    - family: Grasman
-      given: Raoul P. P. P.
-  issued:
-    date-parts:
-      - - 2015
 ---
 
-This document explains, briefly, why and how to run a RI-CLPM in R.
+This walk-through explains, briefly, why and how to run a RI-CLPM in R.
+
+# Critique of cross-lagged pannel models
+
+This post summarizes critiques of the traditional cross-lagged panel model (CLPM), and an improved model by Hamaker, Kuiper, and Grasman {% cite hamaker_critique_2015 -A %}.
+
+The primary point Hamaker and colleagues make regarding the CLPM is that it assumes that there are "no trait-like individual differences that endure." That is, looking at the structure of a CLPM it is clear that individual-level stability must be accounted for entirely by the auto-regressive path between waves. As they put it, it imposes an assumption that there is no between-subject variance of time-invariant, trait-like stability, but only temporal stability, wave to wave, of subjects around the mean score for any particular wave.
+
+<!--more-->
+
+# RI-CLPM
+
+A key insight of the paper is that "we need to separate the _within-person level_ from the _between-person level_" (p. 104). The model they propose, the Random Intercept CLPM (RI-CLPM) separates each person's score on a variable at each wave into the group mean for that wave ($\mu_{t}, \pi_{t}$), an individual's stable score over all waves (the random intercept; $\kappa_{i}, \omega_{i}$) and then an individual level deviation at each wave from the score expected by adding the group-wave-mean and individual trait ($p_{it}, q_{it}$).
+
+The model looks like this:
+
+![RI-CLPM Diagram](/../figs/riclpm-lavaan-demo/hamaker-diagram.png)
+
+Effectively, now, the paths $\alpha_{t}$ (or $\delta_{t}$) between $p_{it}$ (or $q_{it}$) and $p_{i(t+1)}$ (or $q_{i(t+1)}$) no longer capture rank-order stability of individuals, but rather a within-person carry-over effect.
+
+{% quote hamaker_critique_2015 %}
+If it is positive, it implies that occasions on which a person scored above his or her expected score are likely to be followed by occasions on which he or she still scores above the expected score again, and conversely. (p. 104)
+{% endquote %}
+
+More importantly, since $\kappa$ and $\omega$ separate out individual-level stability, the cross-lagged paths $\beta_{t}$ and $\gamma_{t}$ are now straightforward to interpret as the within person effect of one variable on the subsequent measurement of a second variable. This interpretive boost is allowed now because, for example, $\beta_{t}$ is the estimate of the additional explanatory power of _deviations from trait-stable levels_ on variable $y_{t}$ on the _deviations_ of the observed variable $x_{t+1}$ from the group mean and individual trait ($\mu_{t+1} + \kappa_{i}$) after accounting for the expected within-person carry-over effect, $\alpha_{t}$. 
+
+See the paper (Figure 2) for a demonstration of how terribly traditional CLPM performs when you have a data generating process that matches the RI-CLPM -- that is, when you have stable individual differences.
+
+# Implemmenting the RI-CLPM in R
+
+First, make sure we can load the necessary packages. If you haven't installed them, I've included (and commented out) the lines that will allow you to do that. The corresponding git repository is [here](https://github.com/jflournoy/misc-r-projects/tree/master/lavaan_ri-clpm).
 
 ```{r packages, message = F, warning = F}
-knitr::opts_chunk$set(echo = TRUE)
-
 #if you need to install anything, uncomment the below install lines for now
 #install.packages('lavaan')
 #install.packages('tidyverse')
@@ -41,35 +49,11 @@ require(lavaan)
 require(tidyverse)
 ```
 
-# Critique of cross-lagged pannel models
-
-This post summarizes critiques of the traditional cross-lagged panel model (CLPM), and an improved model by Hamaker, Kuiper, and Grasman  [-@Hamakercritiquecrosslaggedpanel2015].
-
-The primary point Hamaker and colleagues make regarding the CLPM is that it assumes that there are "no trait-like individual differences that endure." That is, looking at the structure of a CLPM it is clear that individual-level stability must be accounted for entirely by the auto-regressive path between waves. As they put it, it imposes an assumption that there is no between-subject variance of time-invariant, trait-like stability, but only temporal stability, wave to wave, of subjects around the mean score for any particular wave.
-
-# RI-CLPM
-
-A key insight of the paper is that "we need to separate the _within-person level_ from the _between-person level_" (p. 104). The model they propose, the Random Intercept CLPM (RI-CLPM) separates each person's score on a variable at each wave into the group mean for that wave ($\mu_{t}, \pi_{t}$), an individuals stable score over all waves (the random intercept; $\kappa_{i}, \omega_{i}$) and then an individual level deviation at each wave from the score expected by adding the group-wave-mean and individual trait ($p_{it}, q_{it}$).
-
-The model looks like this:
-
-![RI-CLPM Diagram](hamaker-diagram.png)
-
-Effectively, now, the paths $\alpha_{t}$ (or $\delta_{t}$) between $p_{it}$ (or $q_{it}$) and $p_{i(t+1)}$ (or $q_{i(t+1)}$) no longer capture rank-order stability of individuals, but rather a within-person carry-over effect.
-
->If it is positive, it implies that occasions on which a person scored above his or her expected score are likely to be followed by occasions on which he or she still scores above the expected score again, and conversely. (p. 104)
-
-More importantly, since $\kappa$ and $\omega$ separate out individual-level stability, the cross-lagged paths $\beta_{t}$ and $\gamma_{t}$ are now straightforward to interpret as the within person of effect of one variable on the subsequent measurement of a second variable. This interpretive boost is allowed now because, for example, $\beta_{t}$ is the estimate of the additional explanatory power of _deviations from trait-stable levels_ on variable $y_{t}$ on the _deviations_ of the observed variable $x_{t+1}$ from the group mean and individual trait ($\mu_{t+1} + \kappa_{i}$) after accounting for the expected within-person carry-over effect, $\alpha_{t}$. 
-
-See the paper (Figure 2) for a demonstration of how terribly traditional CLPM performs when you have a data generating process that matches the RI-CLPM -- that is, when you have stable individual differences.
-
-# Implemmenting the RI-CLPM in R
-
 ## Some data
 
-First, we need some data. I'm using a data set presented on at a methods symposium at SRCD in 1997. Supporting documentation can be found [in this pdf](srcdmeth.pdf). Data and code for importing it was helpfully provided by [Sanjay Srivastava](http://twitter.com/hardsci).
+Now, we need some data. I'm using a data set presented on at a methods symposium at SRCD in 1997. Supporting documentation can be found [in this pdf]({{ "/assets/pdf/srcdmeth.pdf" | absolute_url }}). Data and code for importing it was helpfully provided by [Sanjay Srivastava](http://twitter.com/hardsci).
 
-The variables we're considering are a measure of antisocial behavior (`anti`) and reading recognition (`read`). See the docs for descriptions of the other variables. And for the purpose of the model fitting below, `x <- anit` and `y <- read`.
+The variables we're considering are a measure of antisocial behavior (`anti`) and reading recognition (`read`). See the docs for descriptions of the other variables. And for the purpose of the model fitting below, `x <- anit` and `y <- read`. Following are some descriptions of the raw data:
 
 ```{r, lavaan demo growth data}
 antiread <- read.table("srcddata.dat",
@@ -84,20 +68,28 @@ antiread <- read.table("srcddata.dat",
   select(matches('[xy][1-4]'))
 
 knitr::kable(summary(antiread), format = 'markdown')
+```
 
+```{r Variable density, fig.width=6, fig.height=4}
 antiread %>%
+  select(-x4,-y4) %>%
   mutate(pid = 1:n()) %>%
   gather(key, value, -pid) %>%
   extract(col = key, into = c('var', 'wave'), regex = '(\\w)(\\d)') %>%
   ggplot(aes(x = value)) +
   geom_density(alpha = 1) + 
-  facet_wrap(~var, nrow = 1, scales = 'free') + 
+  facet_grid(wave~var, scales = 'free') + 
   theme_classic()
-  
-antiread %>%
+```
+
+```{r Variables over time, fig.width=6, fig.height=4}
+antireadLong <- antiread %>%
+  select(-x4,-y4) %>%
   mutate(pid = 1:n()) %>%
   gather(key, value, -pid) %>%
-  extract(col = key, into = c('var', 'wave'), regex = '(\\w)(\\d)') %>%
+  extract(col = key, into = c('var', 'wave'), regex = '(\\w)(\\d)')
+
+antireadLong %>%
   ggplot(aes(x = wave, y = value, color = var, group = var)) +
   geom_point(position = position_jitter(w = .2), alpha = .1) +
   geom_line(stat = 'identity', aes(group = interaction(var, pid)), alpha = .04) + 
@@ -140,7 +132,8 @@ q1 =~ 1*y1
 q2 =~ 1*y2
 q3 =~ 1*y3
 
-#constrain autoregression and cross lagged effects to be the same across both lags.
+#Later, we may constrain autoregression and cross-lagged
+#effects to be the same across both lags.
 p3 ~ alpha3*p2 + beta3*q2
 p2 ~ alpha2*p1 + beta2*q1
 
@@ -170,14 +163,16 @@ fit <- lavaan(riclpmModel, data = antiread,
 summary(fit, standardized = T)
 ```
 
-## Comparting fits
+## Comparing fits
 
 
 ### RI-CLPM v CLPM
 
 Because the traditional CLPM is nested in the RI-CLPM, we can compare model fit. The correct reference distribution for this comparison is $\chi^2$ but, as Hamaker and colleagues say 
 
->However, we can make use of the fact that the regular chi-square difference test is conservative in this context, meaning that, if it is significant, we are certain that the correct (i.e., chi-bar-square difference) test will be significant too. (p. 105)
+{% quote hamaker_critique_2015 %}
+However, we can make use of the fact that the regular chi-square difference test is conservative in this context, meaning that, if it is significant, we are certain that the correct (i.e., chi-bar-square difference) test will be significant too. (p. 105)
+{% endquote %}
 
 We estimate the traditional CLPM by setting the variance and covariance of $\kappa$ and $\omega$ to 0.
 
@@ -209,7 +204,6 @@ q1 =~ 1*y1
 q2 =~ 1*y2
 q3 =~ 1*y3
 
-#constrain autoregression and cross lagged effects to be the same across both lags.
 p3 ~ alpha3*p2 + beta3*q2
 p2 ~ alpha2*p1 + beta2*q1
 
@@ -240,7 +234,7 @@ fitCLPM <- lavaan(clpmModel, data = antiread,
 anova(fit, fitCLPM)
 ```
 
-It fits much worse, with no model comparison statistic favoring the CLPM (the BIC advantage of 1 point is negligible). We can print out the standardized estimates to compare to the unconstrained RI-CLPM above.
+The CLPM fits much worse, with no model comparison statistic favoring the CLPM (the BIC advantage of 1 point is negligible). We can print out the standardized estimates to compare to the unconstrained RI-CLPM above.
 
 ```{r clpm_estimates}
 summary(fitCLPM, standardize = T)
@@ -315,4 +309,72 @@ Well, according to AIC and the $\chi^2$ test, the constrained model fits worse. 
 summary(fitConstrainedARCL, standardized = T)
 ```
 
-# References
+### Plotting model fit
+
+Now, we can plot the model-fitted values. To examine how the model relates to the data, we'll follow the principle of the model which is to partition the within versus between subject variance. You can reinforce the corresponding intuition by looking back at the path diagram: keep in mind that every observed value will be exactly equal to the wave mean, the individual's latent intercept, and the per-wave latent residual (that is, _p_ and _q_). So first, we'll plot the individual variation around the wave-wise means (the stable, between subject individual differences captured by $\kappa$ and $\omega$), along with the observed values.  You can see that there is a lot of distance between the lines (that is, the expected values based on the random intercept and wave-wise means) and the observed values. It is that deviation that the within-subject portion of the model (the cross-lagged part) is attempting to explain.
+
+```{r Plot predictions, fig.width=10, fig.height=6, message = F, warning = F}
+#get the model-expected means
+means <- fitted(fitConstrainedARCL)$mean
+meansDF <- data.frame(mean = means, key = names(means)) %>%
+  extract(col = key, into = c('var', 'wave'), regex = '(\\w)(\\d)')
+
+#plot the model-expected random intercepts
+predict(fitConstrainedARCL) %>%
+  as.data.frame %>%
+  mutate(pid = 1:n()) %>%
+  gather(key, latentvalue, -pid, -kappa, -omega) %>%
+  extract(col = key, into = c('latentvar', 'wave'), regex = '(\\w)(\\d)') %>%
+  mutate(var = c(p = 'x', q = 'y')[latentvar]) %>%
+  left_join(meansDF) %>% #those means from above
+  left_join(antireadLong, by = c('pid', 'wave', 'var')) %>% #the raw data
+  mutate(expectedLine = ifelse(var == 'x', kappa, omega) + mean,
+         wave = as.numeric(wave)) %>%
+  rowwise() %>%
+  ggplot(aes(x = wave, y = expectedLine, color = var, group = var)) +
+  geom_point(aes(x = wave, y = value, group = interaction(var, pid)), alpha = .1, position = position_jitter(w = .2, h = 0)) +
+  geom_line(aes(y = expectedLine, group = interaction(var, pid)), stat = 'identity', alpha = .1) + 
+  geom_line(aes(y = mean), stat = 'identity', alpha = 1, size = 1, color = 'black') + 
+  facet_wrap(~var, ncol = 2) + 
+  theme_classic()
+```
+
+We can also look at the correlations between the latent residuals, which are essentially the parts of the observed scores that are not accounted for by the stable individual differences in the above graph. 
+
+{% quote hamaker_critique_2015 %}
+That is, the autoregressive parameters $\alpha^{*}_{t}$ and $\delta^{*}_{t}$ do not represent
+the stability of the rank order of individuals from one occasion to
+the next, but rather the amount of within-person carry-over effect
+(cf., Hamaker, 2012; Kuppens, Allen, & Sheeber, 2010; Suls,
+Green, & Hillis, 1998): If it is positive, it implies that occasions on
+which a person scored above his or her expected score are likely to
+be followed by occasions on which he or she still scores above the
+expected score again, and vice versa. (p. 104-105)
+{% endquote %}
+
+So you may interpret the raw correlations in the graph below as the basis for the constrained model estimates of the path weights above. In the interest of checking against over-interpreting these relations, though, here is the authors' footnote to the above statement:
+
+{% quote hamaker_critique_2015 %}
+One could also say these autoregressive parameters indicate the stability of the rank-order of individual deviations, but this is less appealing
+from a substantive viewpoint. (p. 105)
+{% endquote %}
+
+```{r Plot clpm, fig.width=10, fig.height=10, message=F,warning=F}
+library(GGally)
+predict(fitConstrainedARCL) %>%
+  as.data.frame %>%
+  select(-kappa, -omega) %>%
+  ggpairs(lower = list(continuous = wrap(ggally_smooth, alpha = .5))) + 
+  theme_classic()
+  
+```
+
+Note how different, and one might say diminished, the relations in the above graph are versus the relations in the scatter-plot matrix of the raw data, below. The strength of this model seems to lie in its ability to keep one from being fooled into a within-person explanation of what are largely between-person relations.
+
+```{r Plot raw data scatter, fig.width=10, fig.height=10, message = F, warning = F}
+antiread %>% 
+  select(-x4, -y4) %>%
+  ggpairs(lower = list(continuous = wrap(ggally_smooth, alpha = .5))) + 
+  theme_classic()
+```
+{% bibliography --cited_in_order %}
