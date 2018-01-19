@@ -1,0 +1,394 @@
+---
+title: "Mismediation"
+author: "John Flournoy"
+date: "12/27/2017"
+output: 
+    html_document:
+        toc: true
+        toc_float: true
+---
+
+How often do you see evidence for mediation from a statistical test when in fact the data generating process is purely correlational?
+
+```{r echo=F, message=F, warning=F, error=F}
+knitr::opts_chunk$set(message=F,warning=F)
+```
+
+## Generating the data
+
+```{r}
+library(lavaan)
+library(simsem)
+library(semPlot)
+```
+The data generating model specifies three variables over 3 waves. Each is correlated with the other at r = .5, and fairly stable, with an autoregressive path-weight of .7.
+```{r gen}
+generatingModel <- '
+
+#2 on 1
+y2 ~ .7*y1
+x2 ~ .7*x1
+z2 ~ .7*z1
+y2 ~ 0*x1 + 0*z1
+x2 ~ 0*y1 + 0*z1
+z2 ~ 0*y1 + 0*x1
+
+#3 on 2
+y3 ~ .7*y2
+x3 ~ .7*x2
+z3 ~ .7*z2
+y3 ~ 0*x2 + 0*z2
+x3 ~ 0*y2 + 0*z2
+z3 ~ 0*y2 + 0*x2
+
+#wave cors
+y1 ~~ .5*x1 + .5*z1
+x1 ~~ .5*z1
+y2 ~~ .5*x2 + .5*z2
+x2 ~~ .5*z2
+y3 ~~ .5*x3 + .5*z3
+x3 ~~ .5*z3
+
+#Resid
+y1 ~~ 1*y1
+x1 ~~ 1*x1
+z1 ~~ 1*z1
+y2 ~~ 1*y2
+x2 ~~ 1*x2
+z2 ~~ 1*z2
+y3 ~~ 1*y3
+x3 ~~ 1*x3
+z3 ~~ 1*z3
+'
+
+generatingModelEst <- '
+
+#2 on 1
+y2 ~ y1
+x2 ~ x1
+z2 ~ z1
+y2 ~ x1 + z1
+x2 ~ y1 + z1
+z2 ~ y1 + x1
+
+#3 on 2
+y3 ~ y2
+x3 ~ x2
+z3 ~ z2
+y3 ~ x2 + z2
+x3 ~ y2 + z2
+z3 ~ y2 + x2
+
+#wave cors
+y1 ~~ x1 + z1
+x1 ~~ z1
+y2 ~~ x2 + z2
+x2 ~~ z2
+y3 ~~ x3 + z3
+x3 ~~ z3
+
+#Resid
+y1 ~~ y1
+x1 ~~ x1
+z1 ~~ z1
+y2 ~~ y2
+x2 ~~ x2
+z2 ~~ z2
+y3 ~~ y3
+x3 ~~ x3
+z3 ~~ z3
+'
+```
+
+## Misspecified statistical models
+
+Looking for mediation when the null of no mediation is true can be thought of as estimating a misspecified model. I'm going to concentrate just on the significance of the parameter that estimates the mediated effect, since this is often what people do (rarely is model comparison used, and in cross-sectional data it can be shown that a mediation model is just-identified anyway).
+
+We can check out a few misspecifications. First, we'll test the best case scenario short of testing the true model. In `mediationModelControlzT1` we do the usual longitudinal best-practice of regressing our wave 2 dependent variable on its wave 1 measurement (`y2 ~ y1 + c*x1 + b*z2`, where `c` and `b` are just the typical labels of the direct paths between the predictor and outcome, and mediator and outcome). In the regression of our wave 2 mediator on the independent variable, we can also include the mediator's wave 1 measurement (`z2 ~ a*x1 + z1`, where `a` is just the typical label of the path from predictor to mediator). Conceptually, we've made sure to account for stability within each variable over time -- cross-sectional models of mediation don't do this.
+
+In the two other misspecified models, we additionally leave out the measurement of the mediator at wave 1, and then also leave out the measurement of the dependent variable at wave 1. We can also look at the cross-sectional mediation model, and a longitudinal mediational model written without any information about previous measurement.
+
+```{r}
+#Each of these does not correctly capture the data generating model specified previously
+mediationModelControlzT1 <- ' #2-wave model accounting for prior levels
+y2 ~ y1 + c*x1 + b*z2
+z2 ~ a*x1 + z1
+# indirect effect (a*b)
+ab := a*b
+# total effect
+total := c + (a*b)
+'
+mediationModelNoControlzT1 <- '#2-wave model, no control for mediator previous level
+y2 ~ y1 + c*x1 + b*z2
+z2 ~ a*x1  
+# indirect effect (a*b)
+ab := a*b
+# total effect
+total := c + (a*b)
+'
+mediationModelNoControlzOryT1 <- '#2-wave, no control for mediator or outcome previous level
+y2 ~ c*x1 + b*z2
+z2 ~ a*x1  
+# indirect effect (a*b)
+ab := a*b
+# total effect
+total := c + (a*b)
+'
+mediationModelCrossSection <- '#Cross sectional mediation
+y3 ~ c*x3 + b*z3
+z3 ~ a*x3
+#indirect
+ab := a*b
+#total
+total := c + (a*b)'
+
+mediationBadLong <- '#3-wave, no control for mediator or outcome previous level
+y3 ~ c*x1 + b*z2
+z2 ~ a*x1
+#indirect
+ab := a*b
+#total
+total := c + (a*b)'
+```
+
+Before running a buch of simulations, I'll make sure the models are as expected by generating a single set, and fitting the above. I won't show the output because it's rather lengthy. 
+
+```{r warning=F, message=F, results='hide'}
+someData <- simulateData(model=generatingModel, sample.nobs=250, empirical=T)
+fit.DGM <- sem(generatingModelEst, someData, fixed.x=F)
+summary(fit.DGM, standardized=T)
+
+fit.CtrlT1.yz <- sem(mediationModelControlzT1, someData)
+summary(fit.CtrlT1.yz, standardized = T)
+
+fit.noCtrlT1.z <- sem(mediationModelNoControlzT1, someData)
+summary(fit.noCtrlT1.z, standardized = T)
+
+fit.noCtrlT1.yz <- sem(mediationModelNoControlzOryT1, someData)
+summary(fit.noCtrlT1.yz, standardized = T)
+
+fit.CrossSection <- sem(mediationModelCrossSection, someData)
+summary(fit.CrossSection, standardized = T)
+
+fit.BadLong <- sem(mediationBadLong, someData)
+summary(fit.BadLong, standardized = T)
+```
+## Model path diagrams
+
+First, the data generating model:
+
+```{r}
+semPaths(fit.DGM, what='std', layout = 'tree2')
+```
+
+Next, our best shot, controlling for the mediator and dependent variable at wave 1.
+
+```{r}
+summary(fit.CtrlT1.yz)
+semPaths(fit.CtrlT1.yz, whatLabels='std', layout = 'tree')
+```
+
+Now, progressively leaving things out....
+
+```{r}
+summary(fit.noCtrlT1.z)
+semPaths(fit.noCtrlT1.z, whatLabels='std', layout = 'tree')
+```
+
+```{r}
+summary(fit.noCtrlT1.yz)
+semPaths(fit.noCtrlT1.yz, whatLabels='std', layout = 'tree')
+```
+
+```{r}
+summary(fit.CrossSection)
+semPaths(fit.CrossSection, whatLabels='std', layout = 'tree')
+```
+
+```{r}
+summary(fit.BadLong)
+semPaths(fit.BadLong, whatLabels='std', layout = 'tree')
+```
+
+## Power to detect mediation (when the null is true)
+
+You can see that we're getting a hint that the `ab` path might be getting bigger as we further misspecify the model. To find out for sure, let's run the simulations. Our outcome of interest will be the measure of power to detect a significant `ab` path -- the mediated effect. Usually power is a good thing, but if you have power to detect something that's not there, it's an indication that your model is reliably giving you the wrong answer. 
+
+```{r}
+REDOSIMS=F
+if(REDOSIMS){
+    sim.CtrlT1.yz <- simsem::sim(nRep=1000, 
+                                 model=mediationModelControlzT1, 
+                                 n=250, 
+                                 generate=generatingModel, 
+                                 lavaanfun="sem", 
+                                 std.lv=F, 
+                                 multicore=T)
+    sim.noCtrlT1.z <- simsem::sim(nRep=1000, 
+                                  model=mediationModelNoControlzT1, 
+                                  n=250, 
+                                  generate=generatingModel, 
+                                  lavaanfun="sem", 
+                                  std.lv=F, 
+                                  multicore=T)
+    sim.noCtrlT1.yz <- simsem::sim(nRep=1000, 
+                                   model=mediationModelNoControlzOryT1, 
+                                   n=250, 
+                                   generate=generatingModel, 
+                                   lavaanfun="sem", 
+                                   std.lv=F, 
+                                   multicore=T)
+    sim.CrossSection <- simsem::sim(nRep=1000, 
+                                   model=mediationModelCrossSection, 
+                                   n=250, 
+                                   generate=generatingModel, 
+                                   lavaanfun="sem", 
+                                   std.lv=F, 
+                                   multicore=T)
+    sim.BadLong <- simsem::sim(nRep=1000, 
+                                   model=mediationBadLong, 
+                                   n=250, 
+                                   generate=generatingModel, 
+                                   lavaanfun="sem", 
+                                   std.lv=F, 
+                                   multicore=T)
+    saveRDS(object=sim.CtrlT1.yz, file='sim_CtrlT1_yz.RDS')
+    saveRDS(object=sim.noCtrlT1.z, file='sim_noCtrlT1_z.RDS')
+    saveRDS(object=sim.noCtrlT1.yz, file='sim_noCtrlT1_yz.RDS')
+    saveRDS(object=sim.CrossSection, file='sim_CrossSection.RDS')
+    saveRDS(object=sim.BadLong, file='sim_BadLong.RDS')
+} else {
+    sim.CtrlT1.yz <- readRDS(file='sim_CtrlT1_yz.RDS')
+    sim.noCtrlT1.z <- readRDS(file='sim_noCtrlT1_z.RDS')
+    sim.noCtrlT1.yz <- readRDS(file='sim_noCtrlT1_yz.RDS')
+    sim.CrossSection <- readRDS(file='sim_CrossSection.RDS')
+    sim.BadLong <- readRDS(file='sim_BadLong.RDS')
+}
+```
+
+```{r}
+knitr::kable(summaryParam(sim.CtrlT1.yz), digits=2)
+knitr::kable(summaryParam(sim.noCtrlT1.z), digits=2)
+knitr::kable(summaryParam(sim.noCtrlT1.yz), digits=2)
+knitr::kable(summaryParam(sim.CrossSection), digits=2)
+knitr::kable(summaryParam(sim.BadLong), digits=2)
+```
+
+Looking across those `ab` lines, you see that we're not too bad off if we control for our wave 1 measurements. However, if we don't do that, we end up with massive power to detect a significant mediation. To me, this warrants extreme caution.
+
+## Mediation package?
+
+There's a cool package called `mediation` written by some experts in causal inference. I've used it in a paper. I only controlled for the previous level of the outcome variable. Does this package's machinations obviate any of the issues with causal inference in mediation illustrated above? Let's find out!
+
+```{r mediationpkg}
+library(mediation)
+
+crosssectionMediateModel <- function(aDF){
+    model.m <- lm(z2 ~ x2, data = aDF)
+    model.y <- lm(y2 ~ x2 + z2, data = aDF)
+    
+    mediateModel <- try(mediate(model.m = model.m, model.y = model.y, 
+                            sims = 500, boot = F,
+                            treat = 'x2', mediator = 'z2'))
+    if (identical(class(mediateModel), "try-error")){
+        rezlist <- list(coef = NA, se = NA, converged = FALSE)
+    } else {
+        coefVec <- c(d0 = mediateModel$d0, d1 = mediateModel$d0, 
+                     z0 = mediateModel$z0, z1 = mediateModel$d0,
+                     n0 = mediateModel$n0, n1 = mediateModel$n0)
+        
+        seVec <- c(d0 = NA, d1 = NA, 
+                   z0 = NA, z1 = NA,
+                   n0 = NA, n1 = NA)
+        
+        cilowerVec <- c(d0 = mediateModel$d0.ci[[1]], d1 = mediateModel$d0.ci[[1]], 
+                        z0 = mediateModel$z0.ci[[1]], z1 = mediateModel$d0.ci[[1]],
+                        n0 = mediateModel$n0.ci[[1]], n1 = mediateModel$n0.ci[[1]])
+        
+        ciupperVec <- c(d0 = mediateModel$d0.ci[[2]], d1 = mediateModel$d0.ci[[2]], 
+                        z0 = mediateModel$z0.ci[[2]], z1 = mediateModel$d0.ci[[2]],
+                        n0 = mediateModel$n0.ci[[2]], n1 = mediateModel$n0.ci[[2]])
+        
+        rezList <- list(coef = coefVec, se = seVec, cilower = cilowerVec, ciupper = ciupperVec, converged = TRUE)
+    }
+    
+    return(rezList)
+}
+
+anOutfun <- function(obj){
+    acmeNotZero <- !(all(obj$ciupper['d0'] >= 0, obj$cilower['d0'] <= 0))
+}
+
+if(REDOSIMS){
+    mediatePkgCrossSection <- simsem::sim(nRep = 8*10, n = 200, generate = generatingModel, 
+                                          model = crosssectionMediateModel,
+                                          multicore = TRUE, outfun = anOutfun)
+    saveRDS(mediatePkgCrossSection, 'mediatePkgCrossSection.RDS')
+} else {
+    mediatePkgCrossSection <- readRDS('mediatePkgCrossSection.RDS')
+}
+summary(mediatePkgCrossSection)
+
+cat(paste0("Proportion of simulations that reject null of no mediation: ",
+           mediationPower <- sum(unlist(getExtraOutput(mediatePkgCrossSection)))/mediatePkgCrossSection@nRep))
+```
+
+So using this package doesn't help at all in cross-sectional data. We can examine the case with appropriate controls for previous levels as well, to make sure that this may help across techniques.
+
+
+```{r mediatepkgcontrols}
+controlPrevWaveMediateModel <- function(aDF){
+    model.m <- lm(z2 ~ z1 + x1, data = aDF)
+    model.y <- lm(y2 ~ y1 + x1 + z2, data = aDF)
+    
+    mediateModel <- try(mediate(model.m = model.m, model.y = model.y, 
+                            sims = 500, boot = F,
+                            treat = 'x1', mediator = 'z2'))
+    if (identical(class(mediateModel), "try-error")){
+        rezlist <- list(coef = NA, se = NA, converged = FALSE)
+    } else {
+        coefVec <- c(d0 = mediateModel$d0, d1 = mediateModel$d0, 
+                     z0 = mediateModel$z0, z1 = mediateModel$d0,
+                     n0 = mediateModel$n0, n1 = mediateModel$n0)
+        
+        seVec <- c(d0 = NA, d1 = NA, 
+                   z0 = NA, z1 = NA,
+                   n0 = NA, n1 = NA)
+        
+        cilowerVec <- c(d0 = mediateModel$d0.ci[[1]], d1 = mediateModel$d0.ci[[1]], 
+                        z0 = mediateModel$z0.ci[[1]], z1 = mediateModel$d0.ci[[1]],
+                        n0 = mediateModel$n0.ci[[1]], n1 = mediateModel$n0.ci[[1]])
+        
+        ciupperVec <- c(d0 = mediateModel$d0.ci[[2]], d1 = mediateModel$d0.ci[[2]], 
+                        z0 = mediateModel$z0.ci[[2]], z1 = mediateModel$d0.ci[[2]],
+                        n0 = mediateModel$n0.ci[[2]], n1 = mediateModel$n0.ci[[2]])
+        
+        rezList <- list(coef = coefVec, se = seVec, cilower = cilowerVec, ciupper = ciupperVec, converged = TRUE)
+    }
+    
+    return(rezList)
+}
+
+if(REDOSIMS){
+    mediatePkgControlPrev <- simsem::sim(nRep = 8*10, n = 200, generate = generatingModel, 
+                                          model = controlPrevWaveMediateModel,
+                                          multicore = TRUE, outfun = anOutfun)
+    saveRDS(mediatePkgControlPrev, 'mediatePkgControlPrev.RDS')
+} else {
+    mediatePkgControlPrev <- readRDS('mediatePkgControlPrev.RDS')
+}
+summary(mediatePkgControlPrev)
+
+cat(paste0("Proportion of simulations that reject null of no mediation: ",
+           mediationPower <- sum(unlist(getExtraOutput(mediatePkgControlPrev)))/mediatePkgControlPrev@nRep))
+```
+
+This should be around .05, which is the false-positive rate we expect (this is a small number of simulations, 80, so it easily could be a bit above or below). 
+
+## Conclusion
+
+Using the two most common methods I've seen to assess mediation (path-tracing, or the `mediation` package), cross-sectional data will produce evidence of mediation when there is no actual mediation. We know there is no actual mediation because we've created the data such that each variable is only conditional on its previous level, and not at all on the measurements of the other variables. 
+
+For further reading about mediation as one of a family of causal claims, check out
+
+>Bullock, J. G., Green, D. P., & Ha, S. E. (2010). Yes, but what’s the mechanism? (don’t expect an easy answer). Journal of Personality and Social Psychology, 98(4), 550–558. http://doi.org/10.1037/a0018933
