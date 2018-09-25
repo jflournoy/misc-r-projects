@@ -1,0 +1,340 @@
+---
+layout: post
+comments: true
+title: "The RI-CLPM in OpenMX"
+author: "John Flournoy"
+date: "October 20, 2017"
+output: 
+  md_document:
+    toc: true
+---
+
+Lavaan is great. I love lavaan {% cite lavaan %}. But a lot of folks prefer OpenMx, and given its long and widespread usage, especially in fields outside psychology, it might be a bit better road tested. So this is a brief addendum to my previous post, showing you how to implement a RI-CLPM in OpenMx.
+
+<!--more-->
+
+# RI-CLPM
+
+As a reminder, the model looks like this:
+
+![RI-CLPM Diagram](/../figs/riclpm-lavaan-demo/hamaker-diagram.png)
+
+# Implemmenting the RI-CLPM in R
+
+```{r packages, message = F, warning = F}
+#if you need to install anything, uncomment the below install lines for now
+#install.packages('lavaan')
+#install.packages('tidyverse')
+require(OpenMx)
+require(tidyverse)
+```
+
+## Some data
+
+I'll use the same data from before, which was presented on at a methods symposium at SRCD in 1997. Supporting documentation can be found [in this pdf]({{ "/assets/pdf/srcdmeth.pdf" | absolute_url }}). Data and code for importing it was helpfully provided by [Sanjay Srivastava](http://twitter.com/hardsci).
+
+The variables we're considering are a measure of antisocial behavior (`anti`) and reading recognition (`read`). See the docs for descriptions of the other variables. And for the purpose of the model fitting below, `x <- anit` and `y <- read`. Following are some descriptions of the raw data:
+
+```{r, lavaan demo growth data}
+antiread <- read.table("srcddata.dat",
+                       na.strings = c("999.00"),
+                       col.names = c("anti1", "anti2", "anti3", "anti4", 
+                                     "read1", "read2", "read3", "read4",
+                                     "gen", "momage", "kidage", "homecog", 
+                                     "homeemo", "id")
+) %>%
+  rename(x1 = anti1, x2 = anti2, x3 = anti3, x4 = anti4,
+         y1 = read1, y2 = read2, y3 = read3, y4 = read4) %>%
+  select(matches('[xy][1-4]'))
+
+knitr::kable(summary(antiread), format = 'markdown')
+```
+
+```{r Variable density, fig.width=6, fig.height=4}
+antiread %>%
+  select(-x4,-y4) %>%
+  mutate(pid = 1:n()) %>%
+  gather(key, value, -pid) %>%
+  extract(col = key, into = c('var', 'wave'), regex = '(\\w)(\\d)') %>%
+  ggplot(aes(x = value)) +
+  geom_density(alpha = 1) + 
+  facet_grid(wave~var, scales = 'free') + 
+  theme_classic()
+```
+
+```{r Variables over time, fig.width=6, fig.height=4}
+antireadLong <- antiread %>%
+  select(-x4,-y4) %>%
+  mutate(pid = 1:n()) %>%
+  gather(key, value, -pid) %>%
+  extract(col = key, into = c('var', 'wave'), regex = '(\\w)(\\d)')
+
+antireadLong %>%
+  ggplot(aes(x = wave, y = value, color = var, group = var)) +
+  geom_point(position = position_jitter(w = .2), alpha = .1) +
+  geom_line(stat = 'identity', aes(group = interaction(var, pid)), alpha = .04) + 
+  geom_line(stat = 'smooth', method = 'lm', size = 1) + 
+  theme_classic()
+
+```
+
+## Fitting a RI-CLPM in OpenMx
+
+
+```{r,OpenMx ri-clpm}
+antireadRaw <- mxData(observed = antiread, type = 'raw')
+
+manifestsX <- c('x1', 'x2', 'x3')
+manifestsY <- c('y1', 'y2', 'y3')
+
+latentResX <- c('p1', 'p2', 'p3')
+latentResY <- c('q1', 'q2', 'q3')
+
+kappa <- mxPath(from = "kappa", to = manifestsX, 
+                arrows = 1, values = c(1,1,1), free = FALSE)
+omega <- mxPath(from = "omega", to = manifestsY, 
+                arrows = 1, values = c(1,1,1), free = FALSE)
+
+latentInterceptVars <- mxPath(from = c('kappa', 'omega'), arrows = 2,
+                              free = T, connect = 'unique.pairs',
+                              labels = c('kappaVar',
+                                         'koCovar',
+                                         'omegaVar'))
+
+meanPathNames <- unlist(lapply(c('mu', 'pi'), paste, 1:3, sep = ''))
+intercepts <- mxPath(from = "one", to = c(manifestsX, manifestsY),
+                     arrows = 1, free = TRUE,
+                     labels = meanPathNames)
+
+latentRes <- mxPath(from = c(latentResX, latentResY), 
+                    to = c(manifestsX, manifestsY),
+                    arrows = 1, free = F, 
+                    values = rep(1, 6),
+                    connect = 'single')
+
+arPaths <- mxPath(from = c(latentResX[1:2], latentResY[1:2]),
+                  to = c(latentResX[2:3], latentResY[2:3]),
+                  arrows = 1, free = T,
+                  labels = c(rep('alpha', 2), rep('delta', 2)))
+
+lagPaths <- mxPath(from = c(latentResX[1:2], latentResY[1:2]),
+                  to = c(latentResY[2:3], latentResX[2:3]),
+                  arrows = 1, free = T,
+                  labels = c(rep('gamma', 2), rep('beta', 2)))
+```
+
+## Comparing fits
+
+
+### RI-CLPM v CLPM
+
+Because the traditional CLPM is nested in the RI-CLPM, we can compare model fit. The correct reference distribution for this comparison is $\chi^2$ but, as Hamaker and colleagues say 
+
+{% quote hamaker_critique_2015 %}
+However, we can make use of the fact that the regular chi-square difference test is conservative in this context, meaning that, if it is significant, we are certain that the correct (i.e., chi-bar-square difference) test will be significant too. (p. 105)
+{% endquote %}
+
+We estimate the traditional CLPM by setting the variance and covariance of $\kappa$ and $\omega$ to 0.
+
+```{r CLPM}
+clpmModel <- #yes, "Model" is redundant
+'
+#Note, the data contain x1-3 and y1-3
+#Latent mean Structure with intercepts
+
+kappa =~ 1*x1 + 1*x2 + 1*x3
+omega =~ 1*y1 + 1*y2 + 1*y3
+
+x1 ~ mu1*1 #intercepts
+x2 ~ mu2*1
+x3 ~ mu3*1
+y1 ~ pi1*1
+y2 ~ pi2*1
+y3 ~ pi3*1
+
+kappa ~~ 0*kappa #variance nope
+omega ~~ 0*omega #variance nope
+kappa ~~ 0*omega #covariance not even
+
+#laten vars for AR and cross-lagged effects
+p1 =~ 1*x1 #each factor loading set to 1
+p2 =~ 1*x2
+p3 =~ 1*x3
+q1 =~ 1*y1
+q2 =~ 1*y2
+q3 =~ 1*y3
+
+p3 ~ alpha3*p2 + beta3*q2
+p2 ~ alpha2*p1 + beta2*q1
+
+q3 ~ delta3*q2 + gamma3*p2
+q2 ~ delta2*q1 + gamma2*p1
+
+p1 ~~ p1 #variance
+p2 ~~ u2*p2
+p3 ~~ u3*p3
+q1 ~~ q1 #variance
+q2 ~~ v2*q2
+q3 ~~ v3*q3
+
+p1 ~~ q1 #p1 and q1 covariance
+p2 ~~ q2 #p2 and q2 covariance
+p3 ~~ q3 #p2 and q2 covariance'
+
+fitCLPM <- lavaan(clpmModel, data = antiread,
+              missing = 'ML', #for the missing data!
+              int.ov.free = F,
+              int.lv.free = F,
+              auto.fix.first = F,
+              auto.fix.single = F,
+              auto.cov.lv.x = F,
+              auto.cov.y = F,
+              auto.var = F)
+
+anova(fit, fitCLPM)
+```
+
+The CLPM fits much worse, with no model comparison statistic favoring the CLPM (the BIC advantage of 1 point is negligible). We can print out the standardized estimates to compare to the unconstrained RI-CLPM above.
+
+```{r clpm_estimates}
+summary(fitCLPM, standardize = T)
+```
+
+### Adding constraints to RI-CLPM
+
+For parsimony, I usually try to constraint my autoregressive and cross-lagged paths to be the same across intervals. Oh, and residuals too. I'll do this in the following code and then check the fit against the unconstrained model. To do this, all I have to do is make sure the paths have the same name, like `alpha` instead of `alpha2` and `alpha3`.
+
+```{r constrained}
+riclpmModelConstrainedARCL <- 
+'
+#Note, the data contain x1-3 and y1-3
+#Latent mean Structure with intercepts
+
+kappa =~ 1*x1 + 1*x2 + 1*x3
+omega =~ 1*y1 + 1*y2 + 1*y3
+
+x1 ~ mu1*1 #intercepts
+x2 ~ mu2*1
+x3 ~ mu3*1
+y1 ~ pi1*1
+y2 ~ pi2*1
+y3 ~ pi3*1
+
+kappa ~~ kappa #variance
+omega ~~ omega #variance
+kappa ~~ omega #covariance
+
+#laten vars for AR and cross-lagged effects
+p1 =~ 1*x1 #each factor loading set to 1
+p2 =~ 1*x2
+p3 =~ 1*x3
+q1 =~ 1*y1
+q2 =~ 1*y2
+q3 =~ 1*y3
+
+#constrain autoregression and cross lagged effects to be the same across both lags.
+p3 ~ alpha*p2 + beta*q2
+p2 ~ alpha*p1 + beta*q1
+
+q3 ~ delta*q2 + gamma*p2
+q2 ~ delta*q1 + gamma*p1
+
+p1 ~~ p1 #variance
+p2 ~~ u*p2
+p3 ~~ u*p3
+q1 ~~ q1 #variance
+q2 ~~ v*q2
+q3 ~~ v*q3
+
+p1 ~~ q1 #p1 and q1 covariance
+p2 ~~ uv*q2 #p2 and q2 covariance should also be constrained to be the same as
+p3 ~~ uv*q3 #p3 and q3 covariance'
+
+fitConstrainedARCL <- lavaan(riclpmModelConstrainedARCL, data = antiread,
+              missing = 'ML', #for the missing data!
+              int.ov.free = F,
+              int.lv.free = F,
+              auto.fix.first = F,
+              auto.fix.single = F,
+              auto.cov.lv.x = F,
+              auto.cov.y = F,
+              auto.var = F)
+
+anova(fit, fitConstrainedARCL)
+```
+
+Well, according to AIC and the $\chi^2$ test, the constrained model fits worse. But BIC loves the constrained model because it hates parameters. Interpretive ease hates parameters too (most of the time), so let's look at the summary for our simplified model.
+
+```{r summaryconstrained}
+summary(fitConstrainedARCL, standardized = T)
+```
+
+### Plotting model fit
+
+Now, we can plot the model-fitted values. To examine how the model relates to the data, we'll follow the principle of the model which is to partition the within versus between subject variance. You can reinforce the corresponding intuition by looking back at the path diagram: keep in mind that every observed value will be exactly equal to the wave mean, the individual's latent intercept, and the per-wave latent residual (that is, _p_ and _q_). So first, we'll plot the individual variation around the wave-wise means (the stable, between subject individual differences captured by $\kappa$ and $\omega$), along with the observed values.  You can see that there is a lot of distance between the lines (that is, the expected values based on the random intercept and wave-wise means) and the observed values. It is that deviation that the within-subject portion of the model (the cross-lagged part) is attempting to explain.
+
+```{r Plot predictions, fig.width=10, fig.height=6, message = F, warning = F}
+#get the model-expected means
+means <- fitted(fitConstrainedARCL)$mean
+meansDF <- data.frame(mean = means, key = names(means)) %>%
+  extract(col = key, into = c('var', 'wave'), regex = '(\\w)(\\d)')
+
+#plot the model-expected random intercepts
+predict(fitConstrainedARCL) %>%
+  as.data.frame %>%
+  mutate(pid = 1:n()) %>%
+  gather(key, latentvalue, -pid, -kappa, -omega) %>%
+  extract(col = key, into = c('latentvar', 'wave'), regex = '(\\w)(\\d)') %>%
+  mutate(var = c(p = 'x', q = 'y')[latentvar]) %>%
+  left_join(meansDF) %>% #those means from above
+  left_join(antireadLong, by = c('pid', 'wave', 'var')) %>% #the raw data
+  mutate(expectedLine = ifelse(var == 'x', kappa, omega) + mean,
+         wave = as.numeric(wave)) %>%
+  rowwise() %>%
+  ggplot(aes(x = wave, y = expectedLine, color = var, group = var)) +
+  geom_point(aes(x = wave, y = value, group = interaction(var, pid)), alpha = .1, position = position_jitter(w = .2, h = 0)) +
+  geom_line(aes(y = expectedLine, group = interaction(var, pid)), stat = 'identity', alpha = .1) + 
+  geom_line(aes(y = mean), stat = 'identity', alpha = 1, size = 1, color = 'black') + 
+  facet_wrap(~var, ncol = 2) + 
+  theme_classic()
+```
+
+We can also look at the correlations between the latent residuals, which are essentially the parts of the observed scores that are not accounted for by the stable individual differences in the above graph. 
+
+{% quote hamaker_critique_2015 %}
+That is, the autoregressive parameters $\alpha^{*}_{t}$ and $\delta^{*}_{t}$ do not represent
+the stability of the rank order of individuals from one occasion to
+the next, but rather the amount of within-person carry-over effect
+(cf., Hamaker, 2012; Kuppens, Allen, & Sheeber, 2010; Suls,
+Green, & Hillis, 1998): If it is positive, it implies that occasions on
+which a person scored above his or her expected score are likely to
+be followed by occasions on which he or she still scores above the
+expected score again, and vice versa. (p. 104-105)
+{% endquote %}
+
+So you may interpret the raw correlations in the graph below as the basis for the constrained model estimates of the path weights above. In the interest of checking against over-interpreting these relations, though, here is the authors' footnote to the above statement:
+
+{% quote hamaker_critique_2015 %}
+One could also say these autoregressive parameters indicate the stability of the rank-order of individual deviations, but this is less appealing
+from a substantive viewpoint. (p. 105)
+{% endquote %}
+
+```{r Plot clpm, fig.width=10, fig.height=10, message=F,warning=F}
+library(GGally)
+predict(fitConstrainedARCL) %>%
+  as.data.frame %>%
+  select(-kappa, -omega) %>%
+  ggpairs(lower = list(continuous = wrap(ggally_smooth, alpha = .5))) + 
+  theme_classic()
+  
+```
+
+Note how different, and one might say diminished, the relations in the above graph are versus the relations in the scatter-plot matrix of the raw data, below. The strength of this model seems to lie in its ability to keep one from being fooled into a within-person explanation of what are largely between-person relations.
+
+```{r Plot raw data scatter, fig.width=10, fig.height=10, message = F, warning = F}
+antiread %>% 
+  select(-x4, -y4) %>%
+  ggpairs(lower = list(continuous = wrap(ggally_smooth, alpha = .5))) + 
+  theme_classic()
+```
+{% bibliography --cited_in_order %}
