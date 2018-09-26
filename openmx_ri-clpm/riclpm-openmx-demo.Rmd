@@ -3,7 +3,7 @@ layout: post
 comments: true
 title: "The RI-CLPM in OpenMX"
 author: "John Flournoy"
-date: "October 20, 2017"
+date: "September 26, 2018"
 output: 
   md_document:
     toc: true
@@ -81,207 +81,223 @@ antireadLong %>%
 ## Fitting a RI-CLPM in OpenMx
 
 
-```{r,OpenMx ri-clpm}
-antireadRaw <- mxData(observed = antiread, type = 'raw')
+Below is the code to specify and fit the RI-CLPM with equality constraints (in lavaan [here](https://jflournoy.github.io/2017/10/20/riclpm-lavaan-demo/#adding-constraints-to-ri-clpm)) on the autoregressive, cross-lagged, and residual (for wave 2 and 3) paths. 
 
+If you're not familiar with OpenMx syntax, but you know what a latent growth curve model looks like, check out the [OpenMx LGCM example](https://vipbg.vcu.edu/vipbg/OpenMx2/docs//OpenMx/latest/TimeSeries_Path.html). You construct your model using a series of functions to create each element. Note that OpenMx likes everything to be very explicit, which can be a good thing. You should think about and specify reasonable starting values, and you should be prepared to put bounds on variables that have them (e.g., variances shouldn't be negative). I'll call these out as they come up. Also, a lot of the functionality is specified through path labels, and so I'll introduce some shorthand to create labels with similar or identical names.
+
+```{r}
+antireadRaw <- mxData(observed = antiread, type = 'raw')
+```
+
+This specifies that the data is in the `antiread` data.frame, with 'raw' indicating that it is not a covariance matrix, but rather a data.frame with a row per observation, and a column per variable. It will look in the column names for any manifest variables that are specified.
+
+```{r}
 manifestsX <- c('x1', 'x2', 'x3')
 manifestsY <- c('y1', 'y2', 'y3')
 
 latentResX <- c('p1', 'p2', 'p3')
 latentResY <- c('q1', 'q2', 'q3')
+```
 
+The above is just to be able to have single variables that contain all the manifest and latent variables I will be using for each construct. Note that these are _all_ the manifests, but not all the latents.
+
+```{r}
 kappa <- mxPath(from = "kappa", to = manifestsX, 
                 arrows = 1, values = c(1,1,1), free = FALSE)
 omega <- mxPath(from = "omega", to = manifestsY, 
                 arrows = 1, values = c(1,1,1), free = FALSE)
 
+print(omega)
+```
+
+This is how to specify the two latent random intercepts. Keep track of the names you use here, because you will need to indicate them in the model construction call. Also, note that printing the resulting variables gives helpful information you can check against your intended specification. The path weights are set to 1 and set to not be freed for estimation.
+
+```{r}
 latentInterceptVars <- mxPath(from = c('kappa', 'omega'), arrows = 2,
                               free = T, connect = 'unique.pairs',
                               labels = c('kappaVar',
                                          'koCovar',
-                                         'omegaVar'))
+                                         'omegaVar'),
+                              values = c(1, 0, 1),
+                              lbound = c(0, NA, 0))
+```
 
+This creates free variance and covariance paths between the random intercepts. The 'unique.pairs' option will generate a path between each unique combination of the names you use in the "from" parameter. Giving them labels will help you identify them in the output, but are otherwise not strictly necessary. Note that the starting values are set with variances at 1, and the covariance at 0 (because it could be positive or negative), and lower bounds are set on the variance parameters.  
+
+```{r}
 meanPathNames <- unlist(lapply(c('mu', 'pi'), paste, 1:3, sep = ''))
+```
+
+Instead of writing out each of the path labels for the means of each manifest variable, so I call the above. It's more characters than just writing it out, but maybe less prone to typos.
+
+```{r}
 intercepts <- mxPath(from = "one", to = c(manifestsX, manifestsY),
                      arrows = 1, free = TRUE,
-                     labels = meanPathNames)
+                     labels = meanPathNames,
+                     values = rep(c(1,3), each =3))
+```
 
+The name "one" is reserved to refer to the intercept, and we allow the paths to be estimated freely, labeled with the names created above. It's probably not necessary to set starting values here, but I glanced at the histograms above and gave it my best guess, just in case.
+
+```{r}
 latentRes <- mxPath(from = c(latentResX, latentResY), 
                     to = c(manifestsX, manifestsY),
                     arrows = 1, free = F, 
                     values = rep(1, 6),
                     connect = 'single')
+```
 
+This call creates the paths to the latent variables that are also sometimes called "latent residuals." Each of the latent variable paths is fixed to 1.
+
+```{r}
 arPaths <- mxPath(from = c(latentResX[1:2], latentResY[1:2]),
                   to = c(latentResX[2:3], latentResY[2:3]),
-                  arrows = 1, free = T,
-                  labels = c(rep('alpha', 2), rep('delta', 2)))
+                  arrows = 1, free = T, connect = 'single',
+                  labels = c(rep('alpha', 2), rep('delta', 2)),
+                  values = .2)
 
 lagPaths <- mxPath(from = c(latentResX[1:2], latentResY[1:2]),
                   to = c(latentResY[2:3], latentResX[2:3]),
-                  arrows = 1, free = T,
-                  labels = c(rep('gamma', 2), rep('beta', 2)))
+                  arrows = 1, free = T, connect = 'single',
+                  labels = c(rep('gamma', 2), rep('beta', 2)),
+                  value = 0)
+
+print(arPaths)
+print(lagPaths)
 ```
 
-## Comparing fits
+These calls establish the paths between the latent residuals. In the first call the first two latent variables for X and Y are connected to the second two. In the second, call, the first two X and Y variables are connected to the second two Y and X variables, respectively, to establish the lagged relations. **Paths with the same labels are constrained to equality**, which is why these paths have the labels assigned as they do. The starting values are based on the expectation that the autoregressive relation is probably positive.
 
+```{r}
+resVar <- mxPath(from = c(latentResX, latentResY),
+                 arrows = 2, free = T, 
+                 labels = paste0(c(rep('u',3), rep ('v',3)),
+                                 c('1', '', '')),
+                 connect = 'single',
+                 value = 1, lbound = 0)
 
-### RI-CLPM v CLPM
-
-Because the traditional CLPM is nested in the RI-CLPM, we can compare model fit. The correct reference distribution for this comparison is $\chi^2$ but, as Hamaker and colleagues say 
-
-{% quote hamaker_critique_2015 %}
-However, we can make use of the fact that the regular chi-square difference test is conservative in this context, meaning that, if it is significant, we are certain that the correct (i.e., chi-bar-square difference) test will be significant too. (p. 105)
-{% endquote %}
-
-We estimate the traditional CLPM by setting the variance and covariance of $\kappa$ and $\omega$ to 0.
-
-```{r CLPM}
-clpmModel <- #yes, "Model" is redundant
-'
-#Note, the data contain x1-3 and y1-3
-#Latent mean Structure with intercepts
-
-kappa =~ 1*x1 + 1*x2 + 1*x3
-omega =~ 1*y1 + 1*y2 + 1*y3
-
-x1 ~ mu1*1 #intercepts
-x2 ~ mu2*1
-x3 ~ mu3*1
-y1 ~ pi1*1
-y2 ~ pi2*1
-y3 ~ pi3*1
-
-kappa ~~ 0*kappa #variance nope
-omega ~~ 0*omega #variance nope
-kappa ~~ 0*omega #covariance not even
-
-#laten vars for AR and cross-lagged effects
-p1 =~ 1*x1 #each factor loading set to 1
-p2 =~ 1*x2
-p3 =~ 1*x3
-q1 =~ 1*y1
-q2 =~ 1*y2
-q3 =~ 1*y3
-
-p3 ~ alpha3*p2 + beta3*q2
-p2 ~ alpha2*p1 + beta2*q1
-
-q3 ~ delta3*q2 + gamma3*p2
-q2 ~ delta2*q1 + gamma2*p1
-
-p1 ~~ p1 #variance
-p2 ~~ u2*p2
-p3 ~~ u3*p3
-q1 ~~ q1 #variance
-q2 ~~ v2*q2
-q3 ~~ v3*q3
-
-p1 ~~ q1 #p1 and q1 covariance
-p2 ~~ q2 #p2 and q2 covariance
-p3 ~~ q3 #p2 and q2 covariance'
-
-fitCLPM <- lavaan(clpmModel, data = antiread,
-              missing = 'ML', #for the missing data!
-              int.ov.free = F,
-              int.lv.free = F,
-              auto.fix.first = F,
-              auto.fix.single = F,
-              auto.cov.lv.x = F,
-              auto.cov.y = F,
-              auto.var = F)
-
-anova(fit, fitCLPM)
+resCovar <- mxPath(from = latentResX,
+                   to = latentResY,
+                   arrows = 2, free = T, 
+                   labels = paste0(rep ('rescovar',3), 
+                                   c('1', '', '')), 
+                   connect = 'single',
+                   value = 0)
 ```
 
-The CLPM fits much worse, with no model comparison statistic favoring the CLPM (the BIC advantage of 1 point is negligible). We can print out the standardized estimates to compare to the unconstrained RI-CLPM above.
+Finally, the residuals have to be specified. Any path left unspecified will not be included in the model -- unlike `lavaan`, `OpenMx` doesn't assume anything about your model. Note that the code `paste0(c(rep('u',3), rep ('v',3)), c('1', '', ''))` results in the labels: `r paste0(c(rep('u',3), rep ('v',3)), c('1', '', ''))`. These labels constrain the residuals (or disturbances) from wave 2 and 3 to be equal, with those from wave 1 estimated freely. The bivariate covariance is similarly constrained via the labels generated by `paste0(rep ('rescovar',3), c('1', '', ''))`: `r paste0(rep ('rescovar',3), c('1', '', ''))`. Again, the 'value' and 'lbound' options are set to a reasonable values for the variance. The starting value for the covariances is also set explicitly, though `0` is the default.
 
-```{r clpm_estimates}
-summary(fitCLPM, standardize = T)
+```{r}
+riclpm <- mxModel('RICLPM', type = 'RAM',
+                  manifestVars = c(manifestsX, manifestsY),
+                  latentVars = c(latentResX, latentResY, 
+                                 'kappa', 'omega'),
+                  antireadRaw,
+                  kappa,
+                  omega,
+                  latentInterceptVars,
+                  intercepts,
+                  latentRes,
+                  arPaths,
+                  lagPaths,
+                  resVar,
+                  resCovar)
 ```
 
-### Adding constraints to RI-CLPM
+This call actually puts everything together, translating the path specification into estimable matrices. The first argument is the model name (whatever you wish to call it). After that, you must specify all manifest and latent variables that appear in the path specifications (except for "one"). The rest of the call includes all of the model constructors we generated in the above code (including the data specification).
 
-For parsimony, I usually try to constraint my autoregressive and cross-lagged paths to be the same across intervals. Oh, and residuals too. I'll do this in the following code and then check the fit against the unconstrained model. To do this, all I have to do is make sure the paths have the same name, like `alpha` instead of `alpha2` and `alpha3`.
-
-```{r constrained}
-riclpmModelConstrainedARCL <- 
-'
-#Note, the data contain x1-3 and y1-3
-#Latent mean Structure with intercepts
-
-kappa =~ 1*x1 + 1*x2 + 1*x3
-omega =~ 1*y1 + 1*y2 + 1*y3
-
-x1 ~ mu1*1 #intercepts
-x2 ~ mu2*1
-x3 ~ mu3*1
-y1 ~ pi1*1
-y2 ~ pi2*1
-y3 ~ pi3*1
-
-kappa ~~ kappa #variance
-omega ~~ omega #variance
-kappa ~~ omega #covariance
-
-#laten vars for AR and cross-lagged effects
-p1 =~ 1*x1 #each factor loading set to 1
-p2 =~ 1*x2
-p3 =~ 1*x3
-q1 =~ 1*y1
-q2 =~ 1*y2
-q3 =~ 1*y3
-
-#constrain autoregression and cross lagged effects to be the same across both lags.
-p3 ~ alpha*p2 + beta*q2
-p2 ~ alpha*p1 + beta*q1
-
-q3 ~ delta*q2 + gamma*p2
-q2 ~ delta*q1 + gamma*p1
-
-p1 ~~ p1 #variance
-p2 ~~ u*p2
-p3 ~~ u*p3
-q1 ~~ q1 #variance
-q2 ~~ v*q2
-q3 ~~ v*q3
-
-p1 ~~ q1 #p1 and q1 covariance
-p2 ~~ uv*q2 #p2 and q2 covariance should also be constrained to be the same as
-p3 ~~ uv*q3 #p3 and q3 covariance'
-
-fitConstrainedARCL <- lavaan(riclpmModelConstrainedARCL, data = antiread,
-              missing = 'ML', #for the missing data!
-              int.ov.free = F,
-              int.lv.free = F,
-              auto.fix.first = F,
-              auto.fix.single = F,
-              auto.cov.lv.x = F,
-              auto.cov.y = F,
-              auto.var = F)
-
-anova(fit, fitConstrainedARCL)
+```{r}
+mxOption(NULL,"Default optimizer","CSOLNP")
+riclpm_fit <- mxRun(riclpm)
 ```
 
-Well, according to AIC and the $\chi^2$ test, the constrained model fits worse. But BIC loves the constrained model because it hates parameters. Interpretive ease hates parameters too (most of the time), so let's look at the summary for our simplified model.
+This is how you run the model. The optimizer "CSOLNP" is already the default, but I've included this code because often convergence issues can be solved by changing the optimizer. Check out the help on the `mxOption` function for more info. Passing your model variable to the `mxRun` function is where the magic happens.
 
-```{r summaryconstrained}
-summary(fitConstrainedARCL, standardized = T)
+```{r}
+summary(riclpm_fit)
 ```
 
-### Plotting model fit
+If you compare the fitted model summary to the `lavaan` output in the previous post, you'll see they match up very nicely.
 
-Now, we can plot the model-fitted values. To examine how the model relates to the data, we'll follow the principle of the model which is to partition the within versus between subject variance. You can reinforce the corresponding intuition by looking back at the path diagram: keep in mind that every observed value will be exactly equal to the wave mean, the individual's latent intercept, and the per-wave latent residual (that is, _p_ and _q_). So first, we'll plot the individual variation around the wave-wise means (the stable, between subject individual differences captured by $\kappa$ and $\omega$), along with the observed values.  You can see that there is a lot of distance between the lines (that is, the expected values based on the random intercept and wave-wise means) and the observed values. It is that deviation that the within-subject portion of the model (the cross-lagged part) is attempting to explain.
+## Unconstraining and comparing fits 
+
+Editing an OpenMx model is fairly straightforward. In order to compare the model with and without equality constraints, we can create new path definitions without the label constraints, then call the `mxModel` function again with the original model and the new path elements. It will overwrite the old paths with the new specifications.
+
+```{r}
+#free autoregressive and cross-lagged paths
+arPaths_uc <- mxPath(
+  from = c(latentResX[1:2], latentResY[1:2]),
+  to = c(latentResX[2:3], latentResY[2:3]),
+  arrows = 1, free = T, connect = 'single',
+  labels = paste0(c(rep('alpha', 2), rep('delta', 2)), 1:2),
+  values = .2)
+lagPaths_uc <- mxPath(
+  from = c(latentResX[1:2], latentResY[1:2]),
+  to = c(latentResY[2:3], latentResX[2:3]),
+  arrows = 1, free = T, connect = 'single',
+  labels = paste0(c(rep('gamma', 2), rep('beta', 2)), 1:2),
+  value = 0)
+
+#free residuals
+resVar_uc <- mxPath(
+  from = c(latentResX, latentResY),
+  arrows = 2, free = T, 
+  labels = paste0(c(rep('u',3), rep ('v',3)),
+                  1:3),
+  connect = 'single',
+  value = 1, lbound = 0)
+
+resCovar_uc <- mxPath(
+  from = latentResX,
+  to = latentResY,
+  arrows = 2, free = T, 
+  labels = paste0(rep ('rescovar',3), 
+                  1:3), 
+  connect = 'single',
+  value = 0)
+
+riclpm_uc <- mxModel(riclpm, 
+                     arPaths_uc, lagPaths_uc, 
+                     resVar_uc, resCovar_uc,
+                     name = "RICLPM UC")
+
+summary(riclpm_uc_fit <- mxRun(riclpm_uc))
+```
+
+The comparison can be made using `mxCompare`:
+
+```{r}
+mxCompare(riclpm_uc_fit, riclpm_fit)
+```
+
+Note that the default output uses the degrees-of-freedom penalized AIC. The conclusion is still the same, though -- the constrained model fits more poorly, significantly so if you believe the statistical test. 
+
+Here are the estimated parameters:
+
+```{r}
+summary(riclpm_uc_fit)
+```
+
+You can also request standardized parameters (here, for the constrained model):
+
+```{r}
+mxStandardizeRAMpaths(riclpm_fit, SE = T)
+```
+
+## Plotting model fit
+
+There are just a couple of changes to the code from the previous post having to do with how we extract information from the fitted model.
 
 ```{r Plot predictions, fig.width=10, fig.height=6, message = F, warning = F}
 #get the model-expected means
-means <- fitted(fitConstrainedARCL)$mean
-meansDF <- data.frame(mean = means, key = names(means)) %>%
+means <- mxGetExpected(riclpm_fit, component = 'means')
+meansDF <- data.frame(mean = means[1,], key = dimnames(means)[[2]]) %>%
   extract(col = key, into = c('var', 'wave'), regex = '(\\w)(\\d)')
 
+factorScores <- mxFactorScores(riclpm_fit, type = 'regression', minManifests = 0)
+
 #plot the model-expected random intercepts
-predict(fitConstrainedARCL) %>%
-  as.data.frame %>%
+as.data.frame(factorScores[,,1]) %>%
   mutate(pid = 1:n()) %>%
   gather(key, latentvalue, -pid, -kappa, -omega) %>%
   extract(col = key, into = c('latentvar', 'wave'), regex = '(\\w)(\\d)') %>%
@@ -292,49 +308,21 @@ predict(fitConstrainedARCL) %>%
          wave = as.numeric(wave)) %>%
   rowwise() %>%
   ggplot(aes(x = wave, y = expectedLine, color = var, group = var)) +
-  geom_point(aes(x = wave, y = value, group = interaction(var, pid)), alpha = .1, position = position_jitter(w = .2, h = 0)) +
-  geom_line(aes(y = expectedLine, group = interaction(var, pid)), stat = 'identity', alpha = .1) + 
+  geom_point(aes(x = wave, y = value, group = interaction(var, pid)), alpha = .2, position = position_jitter(w = .2, h = 0)) +
+  geom_line(aes(y = expectedLine, group = interaction(var, pid)), stat = 'identity', alpha = .2) + 
   geom_line(aes(y = mean), stat = 'identity', alpha = 1, size = 1, color = 'black') + 
   facet_wrap(~var, ncol = 2) + 
   theme_classic()
 ```
 
-We can also look at the correlations between the latent residuals, which are essentially the parts of the observed scores that are not accounted for by the stable individual differences in the above graph. 
-
-{% quote hamaker_critique_2015 %}
-That is, the autoregressive parameters $\alpha^{*}_{t}$ and $\delta^{*}_{t}$ do not represent
-the stability of the rank order of individuals from one occasion to
-the next, but rather the amount of within-person carry-over effect
-(cf., Hamaker, 2012; Kuppens, Allen, & Sheeber, 2010; Suls,
-Green, & Hillis, 1998): If it is positive, it implies that occasions on
-which a person scored above his or her expected score are likely to
-be followed by occasions on which he or she still scores above the
-expected score again, and vice versa. (p. 104-105)
-{% endquote %}
-
-So you may interpret the raw correlations in the graph below as the basis for the constrained model estimates of the path weights above. In the interest of checking against over-interpreting these relations, though, here is the authors' footnote to the above statement:
-
-{% quote hamaker_critique_2015 %}
-One could also say these autoregressive parameters indicate the stability of the rank-order of individual deviations, but this is less appealing
-from a substantive viewpoint. (p. 105)
-{% endquote %}
+The correlations between the latent residuals from this model are just about as easy to look at as the `lavaan` version.
 
 ```{r Plot clpm, fig.width=10, fig.height=10, message=F,warning=F}
 library(GGally)
-predict(fitConstrainedARCL) %>%
-  as.data.frame %>%
+as.data.frame(factorScores[,,1]) %>%
   select(-kappa, -omega) %>%
   ggpairs(lower = list(continuous = wrap(ggally_smooth, alpha = .5))) + 
   theme_classic()
-  
 ```
 
-Note how different, and one might say diminished, the relations in the above graph are versus the relations in the scatter-plot matrix of the raw data, below. The strength of this model seems to lie in its ability to keep one from being fooled into a within-person explanation of what are largely between-person relations.
-
-```{r Plot raw data scatter, fig.width=10, fig.height=10, message = F, warning = F}
-antiread %>% 
-  select(-x4, -y4) %>%
-  ggpairs(lower = list(continuous = wrap(ggally_smooth, alpha = .5))) + 
-  theme_classic()
-```
 {% bibliography --cited_in_order %}
