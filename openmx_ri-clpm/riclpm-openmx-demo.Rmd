@@ -9,7 +9,7 @@ output:
     toc: true
 ---
 
-Lavaan is great. I love lavaan {% cite lavaan %}. But a lot of folks prefer OpenMx, and given its long and widespread usage, especially in fields outside psychology, it might be a bit better road tested. So this is a brief addendum to my previous post, showing you how to implement a RI-CLPM in OpenMx.
+Lavaan is great. I love lavaan. But a lot of folks prefer [OpenMx](https://openmx.ssri.psu.edu/), and given its long and widespread usage, especially in fields outside psychology, it might be a bit better road tested. So this is a brief addendum to my previous post, showing you how to implement a RI-CLPM in OpenMx.
 
 <!--more-->
 
@@ -325,4 +325,3 @@ as.data.frame(factorScores[,,1]) %>%
   theme_classic()
 ```
 
-{% bibliography --cited_in_order %}
