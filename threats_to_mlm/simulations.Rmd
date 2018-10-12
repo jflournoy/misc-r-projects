@@ -1,0 +1,247 @@
+---
+title: "Threats to inference from MLMs"
+author: "John C. Flournoy"
+date: "October 12, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+The purpose of these simulations is to get a sense for threats to interpretting a very simple null model under two conditions. The first condition is when one estimates the association between two variables by computing the first variable by extracting the grouping-level random effects from a hierarchical linear model and estimate the correlation between that variable and the second variable of interest. The second condition is when one is trying to decide whether there is a quadratic association between two variables, and the residual error is not uniform across the range.
+
+```{r}
+estimate_models <- function(N = 1e3, loadings = .5, true_eff = .5, x_se = 1)
+{
+  l <- loadings
+  indicator_cors <- matrix(c(1, l, l, 
+                             l, 1, l,
+                             l, l, 1), nrow = 3, byrow = T)
+  
+  true_x <- rnorm(N, 0, 2)
+  true_y <- true_x*true_eff
+  
+  observed_x <- rnorm(1e3, mean = true_x, sd = x_se)
+  observed_y_indicators <- dplyr::bind_rows(
+    lapply(true_y, function(ascore){
+      three_scores <- MASS::mvrnorm(n = 1, Sigma = indicator_cors, 
+                                    mu = rep(ascore, 3))
+      return(data.frame(y1 = three_scores[1], 
+                        y2 = three_scores[2],
+                        y3 = three_scores[3]))
+      
+    }))
+  observed_y_indicators$id <- 1:dim(observed_y_indicators)[1]
+  observed_y_indicators_l <- tidyr::gather(observed_y_indicators, yname, y_man, -id)
+  observed_y_indicators_l$x <- rep(observed_x, 3)
+  
+  ymod <- lme4::lmer(y_man ~ 1 + (1 | id), data = observed_y_indicators_l)
+  ymod2 <- lme4::lmer(y_man ~ 1 + x + (1 | id), data = observed_y_indicators_l)
+  y_ranefs <- lme4::ranef(ymod, condVar = TRUE)$id$`(Intercept)`
+  ymod_reg <- lm(y_ranefs ~ observed_x)
+  
+  lmer_x_est <- lme4::fixef(ymod2)['x']
+  lm_x_est <- ymod_reg$coefficients['observed_x']
+  
+  return(data.frame(lmer_x_est = lmer_x_est, 
+                    lm_x_est = lm_x_est))
+}
+
+fun_args_df <- data.frame(expand.grid(loadings = seq(.2, .9, .1),
+                                      x_se = seq(.5, 2, .5), 
+                                      true_eff = seq(.1, .8, .01)))
+
+ranef_bias_fn <- '~/code/misc-r-projects/threats_to_mlm/ranef_bias_df.RDS'
+if(!file.exists(ranef_bias_fn)){
+  list_of_rez <- parallel::mclapply(1:(dim(fun_args_df)[1]),
+                                    function(index){
+                                      i <- (index-1)%%dim(fun_args_df)[1]+1
+                                      loadings <- fun_args_df[i, 'loadings']
+                                      true_eff <- fun_args_df[i, 'true_eff']
+                                      x_se <- fun_args_df[i, 'x_se']
+                                      
+                                      rezdf <- estimate_models(N = 1e3, 
+                                                               loadings = loadings,
+                                                               true_eff = true_eff,
+                                                               x_se = x_se)
+                                      rezdf$loadings <- loadings
+                                      rezdf$true_eff <- true_eff
+                                      rezdf$x_se <- x_se
+                                      return(rezdf)
+                                    },
+                                    mc.cores = parallel::detectCores())
+  list_of_rez_df <- dplyr::bind_rows(list_of_rez)
+  saveRDS(list_of_rez_df, ranef_bias_fn)
+} else {
+  list_of_rez_df <- readRDS(ranef_bias_fn)
+}
+
+
+```
+
+```{r}
+ggplot2::ggplot(list_of_rez_df,
+                ggplot2::aes(x = true_eff))+
+  ggplot2::geom_abline(intercept = 0, slope = 0) + 
+  ggplot2::geom_line(ggplot2::aes(y = lmer_x_est - true_eff, group = loadings, alpha = loadings), 
+                       stat = 'smooth', method = 'gam', color = 'blue') + 
+  ggplot2::geom_line(ggplot2::aes(y = lm_x_est - true_eff, group = loadings, alpha = loadings), 
+                       stat = 'smooth', method = 'gam',
+                      color = 'red') + 
+  ggplot2::scale_alpha_continuous(range = c(.5, 1)) + 
+  # ggplot2::geom_point(ggplot2::aes(y = lmer_x_est), 
+  #                     alpha = .25, 
+  #                     color = 'blue') + 
+  # ggplot2::geom_point(ggplot2::aes(y = lm_x_est), 
+  #                     alpha = .25, 
+  #                     position = ggplot2::position_nudge(x=.025),
+  #                     color = 'red') + 
+  ggplot2::theme_minimal() + 
+  ggplot2::coord_cartesian(y = c(-.3, 0)) + 
+  ggplot2::facet_wrap(~x_se)
+
+```
+
+
+# Condition 2
+
+```{r}
+get_a_df_3 <- function(hetsked_err = TRUE){
+  if(hetsked_err){
+    sigmamat <- matrix(c(1,0,0,0,5,0,0,0,1), nrow = 3)
+  } else {
+    sigmamat <- matrix(c(1,0,0,0,1,0,0,0,1), nrow = 3)
+  }
+  ep <- as.vector(MASS::mvrnorm(1e2, Sigma = sigmamat, mu = c(0, 0, 0)))
+  X <- matrix(c(rep(1, 1e2*3), c(runif(1e2, 9.5, 10.5), runif(1e2, 12.5, 13.5), runif(1e2, 15.5, 16.5))), ncol = 2)
+  X[,2] <- X[,2] - 13
+  y <- unlist(lapply(1:dim(X)[1], function(i){
+    y <- as.numeric(ep[i])
+    return(y)
+  }))
+  
+  adf <- data.frame(id = rep(1:100, 3), age_c = X[,2], y = y)
+  adf$age <- adf$age_c + 13
+  adf$age_c2 <- adf$age_c^2
+  return(adf)
+}
+
+get_a_df_4 <- function(){
+  gamma <- MASS::mvrnorm(1e2, Sigma = matrix(c(1,-.2,-.2,1), nrow = 2), mu = c(0, 0))
+  ep <- as.vector(MASS::mvrnorm(1e2, Sigma = matrix(c(1,0,0,0,0,50,0,0,0,0,1,0,0,0,0,1), nrow = 4), mu = c(0, 0, 0, 0)))
+  X <- matrix(c(rep(1, 1e2*4), c(runif(1e2, 9.5, 10.5), runif(1e2, 12.5, 13.5), runif(1e2, 14.5, 15.5), runif(1e2, 15.5, 16.5))), ncol = 2)
+  X[,2] <- X[,2] - 13
+  y <- unlist(lapply(1:dim(X)[1], function(i){
+    y <- as.numeric(X[i,] %*% gamma[(i-1) %% 100 + 1,] + ep[i])
+    return(y)
+  }))
+  
+  adf <- data.frame(id = rep(1:100, 4), age_c = X[,2], y = y)
+  adf$age <- adf$age_c + 13
+  adf$age_c2 <- adf$age_c^2
+  return(adf)
+}
+
+get_model_diff_p <- function(iter, hetsked_err = TRUE){
+  adf <- get_a_df_3(hetsked_err = hetsked_err)
+  lin <- lme4::lmer(y ~ 1 + age_c + (1 + age_c | id), data = adf, REML = FALSE)
+  quad <- lme4::lmer(y ~ 1 + age_c + age_c2 + (1 + age_c | id), data = adf, REML = FALSE)
+  return(c(quad_coef_t = coef(summary(quad))['age_c2','t value'],
+           mod_comp_p = anova(lin, quad)[2,'Pr(>Chisq)']))
+}
+```
+
+```{r fig.width=5, fig.height=5}
+ggplot2::ggplot(get_a_df_3(), ggplot2::aes(x = age, y = y)) + 
+  ggplot2::geom_point(alpha = .8) + 
+  ggplot2::geom_line(alpha = .5, ggplot2::aes(group = id)) + 
+  ggplot2::geom_smooth(method = 'glm', formula = y ~ poly(x,2), alpha = .9) + 
+  ggplot2::theme_minimal() + 
+  ggplot2::labs(title = 'Test')
+
+ggplot2::ggplot(get_a_df_3(hetsked_err = FALSE), ggplot2::aes(x = age, y = y)) + 
+  ggplot2::geom_point(alpha = .8) + 
+  ggplot2::geom_line(alpha = .5, ggplot2::aes(group = id)) + 
+  ggplot2::geom_smooth(method = 'glm', formula = y ~ poly(x,2), alpha = .9) + 
+  ggplot2::theme_minimal() + 
+  ggplot2::labs(title = 'Null')
+```
+
+```{r}
+hetsked_fn <- '~/code/misc-r-projects/threats_to_mlm/hetsked_threat.RDS'
+hetsked_null_fn <- '~/code/misc-r-projects/threats_to_mlm/hetsked_threat_null.RDS'
+if(!file.exists(hetsked_fn) || !file.exists(hetsked_null_fn)){
+  many_p <- parallel::mclapply(1:(1e3*parallel::detectCores()), 
+                               get_model_diff_p, 
+                               hetsked_err = TRUE,
+                               mc.cores = parallel::detectCores())
+  many_p.df <- data.frame(matrix(unlist(many_p), ncol=2, byrow = T))
+  names(many_p.df) <- names(many_p[[1]])
+  saveRDS(many_p.df, hetsked_fn)
+    
+  many_p_null <- parallel::mclapply(1:(1e3*parallel::detectCores()), 
+                               get_model_diff_p, 
+                               hetsked_err = FALSE,
+                               mc.cores = parallel::detectCores())
+  many_p_null.df <- data.frame(matrix(unlist(many_p_null), ncol=2, byrow = T))
+  names(many_p_null.df) <- names(many_p_null[[1]])
+  saveRDS(many_p_null.df, hetsked_null_fn)
+
+} else {
+  many_p.df <- readRDS(hetsked_fn)
+  many_p_null.df <- readRDS(hetsked_null_fn)
+}
+```
+
+```{r}
+many_p.df <- dplyr::bind_rows(test = many_p.df, null = many_p_null.df, .id = 'model')
+many_p.df <- dplyr::mutate(many_p.df,
+                           quad_coef_p = 2*pt(abs(many_p.df$quad_coef_t), 
+                                              df = 100-4, 
+                                              lower.tail = FALSE),
+                           quad_coef_norm_p = 2*pnorm(abs(many_p.df$quad_coef_t), 
+                                                      lower.tail = FALSE))
+```
+
+```{r}
+ggplot2::ggplot(
+  many_p.df,
+  ggplot2::aes(x = mod_comp_p)) + 
+  ggplot2::geom_histogram(bins = 50,
+                          alpha = .3,
+                          color = '#555555') + 
+  ggplot2::scale_x_continuous(breaks = c(0, .1, .5, 1)) + 
+  ggplot2::geom_vline(xintercept = .05, color = 'red', size = 1) + 
+  ggplot2::theme_minimal() + 
+  ggplot2::labs(
+    y = paste0('Count (out of ', dim(many_p.df)[1]/2, ' iterations)'),
+    x = as.expression(
+      bquote(atop(paste(italic('p'), '-value for the model comparison test'), 
+                  paste('Proportion p < .05 for null = ',
+                        .(round(mean(many_p.df$mod_comp_p[many_p.df$model == 'null'] < .05), 2)),
+                        '; test = ', 
+                        .(round(mean(many_p.df$mod_comp_p[many_p.df$model == 'test'] < .05), 2))) )))) + 
+  ggplot2::facet_wrap(~model)
+```
+
+```{r}
+ggplot2::ggplot(
+  many_p.df,
+  ggplot2::aes(x = quad_coef_p)) + 
+  ggplot2::geom_histogram(bins = 50,
+                          alpha = .3,
+                          color = '#555555') + 
+  ggplot2::scale_x_continuous(breaks = c(0, .1, .5, 1)) + 
+  ggplot2::geom_vline(xintercept = .05, color = 'red', size = 1) + 
+  ggplot2::theme_minimal() + 
+  ggplot2::labs(
+    y = paste0('Count (out of ', dim(many_p.df)[1]/2, ' iterations)'),
+    x = as.expression(
+      bquote(atop(paste(italic('p'), '-value for the model comparison test'), 
+                  paste('Proportion p < .05 for null = ',
+                        .(round(mean(many_p.df$quad_coef_p[many_p.df$model == 'null'] < .05), 2)),
+                        '; test = ', 
+                        .(round(mean(many_p.df$quad_coef_p[many_p.df$model == 'test'] < .05), 2))) )))) + 
+  ggplot2::facet_wrap(~model)
+```
