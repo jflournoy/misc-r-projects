@@ -7,6 +7,7 @@ output: html_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+code_dir <- '~/code_new/'
 ```
 
 In my work thus far, sorry to say, I haven't taken very seriously the threat posed by non-homogeneous residual variance in estimating multi-level growth models. But I know of no theoretical or empirical reason to think that the adolescents that I study should not differ from age to age (in some systematic way) in the extent to which our models leave variance unmodeled (and thus, resideding in $\epsilon$).
@@ -43,8 +44,11 @@ get_model_diff_p <- function(iter, hetsked_err = TRUE){
   adf$age_group <- round(adf$age_c)
   lin <- lme4::lmer(y ~ 1 + age_c + (1 + age_c | id), data = adf, REML = FALSE)
   quad <- lme4::lmer(y ~ 1 + age_c + age_c2 + (1 + age_c | id), data = adf, REML = FALSE)
+  quad_coef_nlme_t <- NA
+  mod_comp_nlme_p <- NA
+  
   if(hetsked_err){
-    lin_nlme <- nlme::lme(
+    lin_nlme <- try(nlme::lme(
       fixed = y ~ 1 + age_c,
       data = adf,
       random = ~ 1 + age_c | id,
@@ -54,8 +58,8 @@ get_model_diff_p <- function(iter, hetsked_err = TRUE){
                                  optimMethod = 'L-BFGS-B',
                                  maxIter = 1e4,
                                  msMaxIter = 1e4,
-                                 msMaxEval = 1e4))
-    quad_nlme <- nlme::lme(
+                                 msMaxEval = 1e4)))
+    quad_nlme <- try(nlme::lme(
       fixed = y ~ 1 + age_c + age_c2,
       data = adf,
       random = ~ 1 + age_c | id,
@@ -65,12 +69,17 @@ get_model_diff_p <- function(iter, hetsked_err = TRUE){
                                  optimMethod = 'L-BFGS-B',
                                  maxIter = 1e4,
                                  msMaxIter = 1e4,
-                                 msMaxEval = 1e4))
-    quad_coef_nlme_t <- coef(summary(quad_nlme))['age_c2', 't-value']
-    mod_comp_nlme_p <- anova(lin_nlme, quad_nlme)[2,'p-value']
-  } else {
-    quad_coef_nlme_t <- NA
-    mod_comp_nlme_p <- NA
+                                 msMaxEval = 1e4)))
+
+    
+    if(!inherits(quad_nlme, 'try-error')){
+      quad_coef_nlme_t <- coef(summary(quad_nlme))['age_c2', 't-value']
+    } 
+    if(!any(unlist(lapply(list(lin_nlme, quad_nlme), 
+                          inherits, 
+                          what = 'try-error')))){
+      mod_comp_nlme_p <- anova(lin_nlme, quad_nlme)[2,'p-value']
+    }
   } 
   return(c(quad_coef_t = coef(summary(quad))['age_c2','t value'],
            mod_comp_p = anova(lin, quad)[2,'Pr(>Chisq)'],
@@ -96,14 +105,14 @@ ggplot2::ggplot(get_a_df_3(hetsked_err = FALSE), ggplot2::aes(x = age, y = y)) +
 ```
 
 ```{r message=F}
-hetsked_fn <- '~/code/misc-r-projects/threats_to_mlm/hetsked_threat.RDS'
-hetsked_null_fn <- '~/code/misc-r-projects/threats_to_mlm/hetsked_threat_null.RDS'
+hetsked_fn <- file.path(code_dir, 'misc-r-projects/threats_to_mlm/hetsked_threat.RDS')
+hetsked_null_fn <- file.path(code_dir, 'misc-r-projects/threats_to_mlm/hetsked_threat_null.RDS')
 if(!file.exists(hetsked_fn) || !file.exists(hetsked_null_fn)){
   many_p <- parallel::mclapply(1:(1e3*parallel::detectCores()), 
                                get_model_diff_p, 
                                hetsked_err = TRUE,
                                mc.cores = parallel::detectCores())
-  many_p.df <- data.frame(matrix(unlist(many_p), ncol=2, byrow = T))
+  many_p.df <- data.frame(matrix(unlist(many_p), ncol=length(many_p[[1]]), byrow = T))
   names(many_p.df) <- names(many_p[[1]])
   saveRDS(many_p.df, hetsked_fn)
     
@@ -111,7 +120,7 @@ if(!file.exists(hetsked_fn) || !file.exists(hetsked_null_fn)){
                                get_model_diff_p, 
                                hetsked_err = FALSE,
                                mc.cores = parallel::detectCores())
-  many_p_null.df <- data.frame(matrix(unlist(many_p_null), ncol=2, byrow = T))
+  many_p_null.df <- data.frame(matrix(unlist(many_p_null), ncol=length(many_p[[1]]), byrow = T))
   names(many_p_null.df) <- names(many_p_null[[1]])
   saveRDS(many_p_null.df, hetsked_null_fn)
 } else {
@@ -123,10 +132,15 @@ if(!file.exists(hetsked_fn) || !file.exists(hetsked_null_fn)){
 ```{r}
 many_p.df <- dplyr::bind_rows(test = many_p.df, null = many_p_null.df, .id = 'model')
 many_p.df <- dplyr::mutate(many_p.df,
-                           quad_coef_p = 2*pt(abs(many_p.df$quad_coef_t), 
+                           quad_coef_p = 2*pt(abs(quad_coef_t), 
                                               df = 100-4, 
                                               lower.tail = FALSE),
-                           quad_coef_norm_p = 2*pnorm(abs(many_p.df$quad_coef_t), 
+                           quad_coef_norm_p = 2*pnorm(abs(quad_coef_t), 
+                                                      lower.tail = FALSE),
+                           quad_coef_nlme_p = 2*pt(abs(quad_coef_nlme_t), 
+                                              df = 100-4, 
+                                              lower.tail = FALSE),
+                           quad_coef_norm_nlme_p = 2*pnorm(abs(quad_coef_nlme_t), 
                                                       lower.tail = FALSE))
 ```
 
@@ -149,6 +163,25 @@ ggplot2::ggplot(
                         '; test = ', 
                         .(round(mean(many_p.df$mod_comp_p[many_p.df$model == 'test'] < .05), 2))) )))) + 
   ggplot2::facet_wrap(~model)
+ggplot2::ggplot(
+  many_p.df,
+  ggplot2::aes(x = mod_comp_nlme_p)) + 
+  ggplot2::geom_histogram(bins = 50,
+                          alpha = .3,
+                          color = '#555555') + 
+  ggplot2::scale_x_continuous(breaks = c(0, .1, .5, 1)) + 
+  ggplot2::geom_vline(xintercept = .05, color = 'red', size = 1) + 
+  ggplot2::theme_minimal() + 
+  ggplot2::labs(
+    y = paste0('Count (out of ', dim(many_p.df)[1]/2, ' iterations)'),
+    x = as.expression(
+      bquote(atop(paste(italic('p'), '-value for the model comparison test'), 
+                  atop(paste('Proportion of models converged = ',
+                             .(round(mean(!is.na(many_p.df$mod_comp_nlme_p[many_p.df$model == 'test'])), 2))),
+                       paste(' Proportion p < .05 = ', 
+                             .(round(mean(many_p.df$mod_comp_nlme_p[many_p.df$model == 'test'] < .05,
+                                          na.rm = T), 2)))) )))) + 
+  ggplot2::labs(title = 'NLME with residuals allowed to vary by age group for test data')
 ```
 
 ```{r}
@@ -164,12 +197,31 @@ ggplot2::ggplot(
   ggplot2::labs(
     y = paste0('Count (out of ', dim(many_p.df)[1]/2, ' iterations)'),
     x = as.expression(
-      bquote(atop(paste(italic('p'), '-value for the model comparison test'), 
+      bquote(atop(paste(italic('p'), '-value for the quadratic coef test'), 
                   paste('Proportion p < .05 for null = ',
                         .(round(mean(many_p.df$quad_coef_p[many_p.df$model == 'null'] < .05), 2)),
                         '; test = ', 
                         .(round(mean(many_p.df$quad_coef_p[many_p.df$model == 'test'] < .05), 2))) )))) + 
   ggplot2::facet_wrap(~model)
+ggplot2::ggplot(
+  many_p.df,
+  ggplot2::aes(x = quad_coef_nlme_p)) + 
+  ggplot2::geom_histogram(bins = 50,
+                          alpha = .3,
+                          color = '#555555') + 
+  ggplot2::scale_x_continuous(breaks = c(0, .1, .5, 1)) + 
+  ggplot2::geom_vline(xintercept = .05, color = 'red', size = 1) + 
+  ggplot2::theme_minimal() + 
+  ggplot2::labs(
+    y = paste0('Count (out of ', dim(many_p.df)[1]/2, ' iterations)'),
+    x = as.expression(
+      bquote(atop(paste(italic('p'), '-value for the quadratic coef test'), 
+                  atop(paste('Proportion of models converged = ',
+                             .(round(mean(!is.na(many_p.df$quad_coef_nlme_p[many_p.df$model == 'test'])), 2))),
+                       paste(' Proportion p < .05 = ', 
+                             .(round(mean(many_p.df$quad_coef_nlme_p[many_p.df$model == 'test'] < .05,
+                                          na.rm = T), 2)))) )))) + 
+  ggplot2::labs(title = 'NLME with residuals allowed to vary by age group for test data')
 ```
 
 
