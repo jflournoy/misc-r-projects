@@ -1,0 +1,91 @@
+---
+author: john flournoy
+title: 'Walktrap with single community'
+---
+
+The walktrap algorithm is a popular method of community-detection or cluster analysis in social network and correlational network data. Especially in psychological data, a reasonable hypothesis to be tested is simply whether or not clusters are detected. Detection of clusters are taken of evidence for their existence, and then membership is interpretted in light of the substantive goals of the investigation. If no clusters are detected, then interpretation of membership becomes moot. Therefore, the null hypothesis of primary interest is that there are no true clusters. In correlational network analysis, whether the correlation matrix expresses associations between measured variables or individual profiles, this null is quite reasonable as it instantiates the broad philisophical view of continuous variation without taxanomic differences. In the case of profile correlatoins, the existence of taxanomic separation between groups of people is especially controversial (examining clustering of variables is bread-and-butter psychometrics, though not without its own controversy).
+
+I was curious to see how the walktrap algorithm performed under the null hypothesis of a single community. To investigate, I define generative population correlation matrices with identical correlations among all nodes. This ensures that each node is connected to every other node with equal weight. Since a community is defined by the relative densitity of connections between nodes within the same community as without, this seems to me a fairly straightforward and simple way to define a network strucutre with a single community. Another possibility, not yet investigated, is connecting each node to just two others such that all nodes are connected (a ring graph). There are other topologies as well, but I think the graph I use to generate is especially reasonable for the kinds of correlational networks we might observe in psychology (e.g., the ring graph seems a poor choice because it's unrealistic to think that some variable would be correlated with just two others, and not at all to the remaining, or that some person would be similar in their personality profile to two other people but not at all to everyone else).
+
+In the data I simulate below, I vary the number of nodes (10, 40, 100), the edge weights (.2, .5, .8), and the sample size (100, 500).
+
+First, importantly, walktrap _is_ capable of returing a single community under at least one condition (a perfectly estimated correlation network with one community as described above):
+
+```{r}
+sigma_cor <- diag(100)
+sigma_cor[upper.tri(sigma_cor)] <- .3
+sigma_cor[lower.tri(sigma_cor)] <- .3
+
+agraph <- igraph::graph_from_adjacency_matrix(sigma_cor, mode = 'undirected', weighted = T, diag = F)
+wtc <- igraph::walktrap.community(agraph)
+length(wtc)
+igraph::sizes(wtc)
+```
+
+The real question is whether it can do so on noisy data that.
+
+```{r}
+library(igraph)
+library(parallel)
+
+count_coms <- function(nnodes = 100,
+                                edge_weight = .3,
+                                N = 100
+){
+  sigma_cor <- diag(nnodes)
+  sigma_cor[upper.tri(sigma_cor)] <- edge_weight
+  sigma_cor[lower.tri(sigma_cor)] <- edge_weight
+  
+  adf <- MASS::mvrnorm(n = N, Sigma = sigma_cor, mu = rep(0, nnodes))
+  obs_cor_mat <- cor(adf)
+  
+  agraph <- igraph::graph_from_adjacency_matrix(obs_cor_mat, mode = 'undirected', weighted = T, diag = F)
+  wtc <- igraph::walktrap.community(agraph)
+  ncom <- length(wtc)
+  return(ncom)
+}
+stderr.prop <- function(p, n){
+  sqrt( p*(1 - p) / n )
+}
+
+
+replicates_df <- expand.grid(nnodes = c(10, 40, 100), edge_weight = c(.2, .5, .8), N = c(100,500))
+
+simulated_rez <- parallel::mclapply(1:dim(replicates_df)[1], function(i){
+  com_sizes <- replicate(1e3, expr = count_coms(nnodes = replicates_df$nnodes[i], 
+                                                edge_weight = replicates_df$edge_weight[i], 
+                                                N = replicates_df$N[i]))
+  return(data.frame(
+    nnodes = replicates_df$nnodes[i], 
+    edge_weight = replicates_df$edge_weight[i], 
+    N = replicates_df$N[i],
+    size = com_sizes))
+}, mc.cores = 4)
+
+simulated_rez_df <- dplyr::bind_rows(simulated_rez)
+
+summary_df <- dplyr::summarize(dplyr::group_by(simulated_rez_df, nnodes, edge_weight, N),
+                               error_rate = mean(size > 1),
+                               se = stderr.prop(error_rate, n()),
+                               ci.u = error_rate + 1.96*se,
+                               ci.l = error_rate - 1.96*se)
+library(ggplot2)
+bordergray <- '#cccccc'
+ggplot(dplyr::mutate(summary_df, N = factor(N)), aes(x = nnodes, y = error_rate)) + 
+  geom_errorbar(aes(ymin = ci.l, ymax = ci.u), width = 0) + 
+  geom_line(alpha = .5, aes(linetype = N)) + 
+  geom_hline(yintercept = .05, color = 'red', size = .5) + 
+  geom_point() +
+  facet_grid( ~ edge_weight, labeller = label_both) + 
+  scale_y_continuous(breaks = c(.05, .5, 1)) + 
+  theme_minimal() +
+  theme(
+        panel.border = element_rect(fill = NA, color = bordergray, size = 1, linetype = 1),
+        strip.background = element_rect(fill=bordergray, color = bordergray, size = 1, linetype = 1),
+        axis.line.x = element_line(color = NA, size = .5, linetype = 1),
+        axis.line.y = element_line(color = NA, size = .5, linetype = 1),
+panel.spacing = unit(0, units = 'in')) + 
+  coord_cartesian(y = c(0,1))
+```
+
+To calculate the error rate above, I just take the proportion of times walktrap returns the wrong number of communities (anything > 1). This is a very surprising and disconcerting result as it appears that regardless of the number of nodes, edge strength, and sample size the algorithm very often returns the wrong number of communities (like, between half the time and all the time). Arguably, this is sort of a corner case for the algorithm, which was developed to deal with real networks as far as I know. The expectation there is that there are communities, so error performance is measured in situations where there are several versus a lot of communities.
