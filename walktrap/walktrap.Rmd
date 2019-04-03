@@ -22,7 +22,7 @@ length(wtc)
 igraph::sizes(wtc)
 ```
 
-The real question is whether it can do so on noisy data that.
+The real question is whether it can do so on noisy data.
 
 ```{r}
 library(igraph)
@@ -48,9 +48,10 @@ stderr.prop <- function(p, n){
   sqrt( p*(1 - p) / n )
 }
 
+nnodes <- c(10, 40, 100, 200)
+replicates_df <- expand.grid(nnodes = nnodes, edge_weight = c(.2, .5, .8), N = c(100,500))
 
-replicates_df <- expand.grid(nnodes = c(10, 40, 100), edge_weight = c(.2, .5, .8), N = c(100,500))
-
+library(parallel)
 simulated_rez <- parallel::mclapply(1:dim(replicates_df)[1], function(i){
   com_sizes <- replicate(1e3, expr = count_coms(nnodes = replicates_df$nnodes[i], 
                                                 edge_weight = replicates_df$edge_weight[i], 
@@ -62,11 +63,12 @@ simulated_rez <- parallel::mclapply(1:dim(replicates_df)[1], function(i){
     size = com_sizes))
 }, mc.cores = 4)
 
-simulated_rez_df <- dplyr::bind_rows(simulated_rez)
+simulated_rez_df <- dplyr::bind_rows(simulated_rez) %>%
+  dplyr::mutate(single_comm_detected = size == 1 | size == nnodes)
 
 summary_df <- dplyr::summarize(dplyr::group_by(simulated_rez_df, nnodes, edge_weight, N),
-                               error_rate = mean(size > 1),
-                               se = stderr.prop(error_rate, n()),
+                               error_rate = mean(!single_comm_detected),
+                               se = stderr.prop(error_rate, dplyr::n()),
                                ci.u = error_rate + 1.96*se,
                                ci.l = error_rate - 1.96*se)
 library(ggplot2)
@@ -74,10 +76,12 @@ bordergray <- '#cccccc'
 ggplot(dplyr::mutate(summary_df, N = factor(N)), aes(x = nnodes, y = error_rate)) + 
   geom_errorbar(aes(ymin = ci.l, ymax = ci.u), width = 0) + 
   geom_line(alpha = .5, aes(linetype = N)) + 
+  geom_hline(yintercept = .00, color = 'gray', size = .5) + 
   geom_hline(yintercept = .05, color = 'red', size = .5) + 
   geom_point() +
   facet_grid( ~ edge_weight, labeller = label_both) + 
-  scale_y_continuous(breaks = c(.05, .5, 1)) + 
+  scale_x_continuous(breaks = nnodes) + 
+  scale_y_continuous(breaks = c(0, .05, .5, 1)) + 
   theme_minimal() +
   theme(
         panel.border = element_rect(fill = NA, color = bordergray, size = 1, linetype = 1),
@@ -88,4 +92,131 @@ panel.spacing = unit(0, units = 'in')) +
   coord_cartesian(y = c(0,1))
 ```
 
-To calculate the error rate above, I just take the proportion of times walktrap returns the wrong number of communities (anything > 1). This is a very surprising and disconcerting result as it appears that regardless of the number of nodes, edge strength, and sample size the algorithm very often returns the wrong number of communities (like, between half the time and all the time). Arguably, this is sort of a corner case for the algorithm, which was developed to deal with real networks as far as I know. The expectation there is that there are communities, so error performance is measured in situations where there are several versus a lot of communities.
+To calculate the error rate above, I just take the proportion of times walktrap returns the wrong number of communities. What constitutes an error is any number of communities > 1 that is also not equal to the number of nodes. After all, 100 communities in 100 nodes is conceptually the same as 1 community (a community of hermits?). It seems that under some conditions the algorithm performs well. High edge strength, high N (a proxy for precision of edge-strength estimate), and weirdly, low sampple size. However, with several combinations this algorithm produces very high error.
+
+## Different kinds of networks
+
+We can also imagine networks produced by a similarity matrix. In this case, I'll produce two structures. Each individual i in N gets a random vector of real numbers drawn from a normal distribution with SD = 1. Edges are constructed by counting the number of elements for individual i and j that are both of the same sign and have magnitudes greater than 2. In the first set, I generate a population vector of magnitudes and signs from a normal distribution with mean 0, SD = 2 and draw observed vectors from that using normal distribution with mean 0, sd = 1. For the second set, I generate N subject level vectors, and then draw the observed vectors from those subject-level vectors. These instantiate two possible nulls -- first, that there are no communities because people are similar, and second that there are no communities because people differ randomly. 
+
+```{r}
+get_individual_vector <- function(popvec, sd = 1){
+  ivec <- rnorm(length(popvec), mean = popvec, sd = sd)
+  return(ivec)
+}
+get_popvec <- function(veclen, n_pop, mean = 0, sd = 2){
+  popvecs <- lapply(1:n_pop, function(i) {
+    rnorm(n = veclen, mean = mean, sd = sd) 
+  })
+  return(popvecs)
+}
+draw_data <- function(N, p, level = 1, error_sd = 1, es_sd = 2, es_mean = 0){
+  if (!all(level %in% c(1,2))) {
+    stop('Level not either 1 or 2')
+  } else if(level == 1){
+    popvec <- get_popvec(veclen = p, n_pop = 1, mean = es_mean, sd = es_sd)
+    ivecs <- lapply(1:N, function(i){
+      get_individual_vector(popvec = popvec[[1]], sd = error_sd)
+    })
+  } else if(level == 2) {
+    popvecs <- get_popvec(veclen = p, n_pop = N, mean = es_mean, sd = es_sd)
+    ivecs <- lapply(popvecs, function(popvec){
+      get_individual_vector(popvec = popvec, sd = error_sd)
+    })
+  }
+  return(ivecs)
+}
+calc_sim <- function(vec1, vec2){
+  vec1_sig <- sign(vec1 * (abs(vec1) > 2))
+  vec2_sig <- sign(vec2 * (abs(vec2) > 2))
+  similarties <- (vec1_sig == vec2_sig) & (vec1_sig != 0) & (vec2_sig != 0)
+  return(sum(similarties))
+}
+similarity_matrix <- function(ivecs, sparsity = T){
+  N <- length(ivecs)
+  simmat <- diag(N)
+  for(i in 1:(N-1)){
+    for(j in (i+1):N){
+      asimil <- calc_sim(ivecs[[i]], ivecs[[j]])
+      simmat[i,j] <- asimil
+      simmat[j,i] <- asimil
+    }
+  }
+  if(sparsity){
+    min_sim <- min(simmat[upper.tri(simmat)])
+    simmat <- simmat - min_sim 
+  }
+  diag(simmat) <- 0
+  return(simmat)
+}
+
+count_simil_coms <- function(N, p, sparsity = T, ...){
+  data_list <- draw_data(N, p, ...)
+  asimmat <- similarity_matrix(data_list, sparsity = sparsity)
+  agraph <- igraph::graph_from_adjacency_matrix(asimmat, mode = 'undirected', weighted = T, diag = F)
+  wtc <- igraph::walktrap.community(agraph)
+  ncom <- length(wtc)
+  return(ncom)
+}
+
+n.upper.tri <- Vectorize(function(size){
+  size*(size-1)/2
+})
+
+replicates_simil_df <- expand.grid(N = c(50,100,200), 
+                                   p = n.upper.tri(c(6, 12, 24)),
+                                   sparsity = c(T, F),
+                                   error_sd = c(.1, .5, 1, 2, 4))
+
+set.seed(1212223409)
+replicates_simil_df$core <- sample(rep(1:3, each = 30), size = 90, replace = F)
+
+library(parallel)
+simulated_simil_rez <- parallel::mclapply(as.list(1:3), function(core){
+  parset <- replicates_simil_df[replicates_simil_df$core == core,]
+  somerez <- lapply(as.list(1:dim(parset)[1]), function(i){
+    com_sizes <- replicate(1e3, expr = count_simil_coms(N = parset$N[i], 
+                                                        p = parset$p[i], 
+                                                        sparsity = parset$sparsity[i],
+                                                        error_sd = parset$error_sd[i]))
+    return(data.frame(
+      N = parset$N[i], 
+      p = parset$p[i], 
+      sparsity = parset$sparsity[i],
+      error_sd = parset$error_sd[i],
+      size = com_sizes))
+  })
+  rezdf <- dplyr::bind_rows(somerez)
+  return(rezdf)
+}, mc.cores = 3)
+
+simulated_simil_rez_df <- dplyr::bind_rows(simulated_simil_rez) %>%
+  dplyr::mutate(single_comm_detected = size == 1 | size == N)
+
+summary_simil_df <- dplyr::ungroup(
+  dplyr::summarize(dplyr::group_by(simulated_simil_rez_df, 
+                                   N, p, sparsity, error_sd),
+                   error_rate = mean(!single_comm_detected),
+                   se = stderr.prop(error_rate, dplyr::n()),
+                   ci.u = error_rate + 1.96*se,
+                   ci.l = error_rate - 1.96*se))
+library(ggplot2)
+bordergray <- '#cccccc'
+ggplot(dplyr::mutate(summary_simil_df, p = factor(p)), aes(x = N, y = error_rate)) + 
+  geom_errorbar(aes(ymin = ci.l, ymax = ci.u), width = 0) + 
+  geom_line(alpha = .5, aes(linetype = p)) + 
+  geom_hline(yintercept = .00, color = 'gray', size = .5) + 
+  geom_hline(yintercept = .05, color = 'red', size = .5) + 
+  geom_point() +
+  facet_grid(sparsity ~ error_sd, labeller = label_both) + 
+  scale_x_continuous(breaks = nnodes) + 
+  scale_y_continuous(breaks = c(0, .05, .5, 1)) + 
+  theme_minimal() +
+  theme(
+        panel.border = element_rect(fill = NA, color = bordergray, size = 1, linetype = 1),
+        strip.background = element_rect(fill=bordergray, color = bordergray, size = 1, linetype = 1),
+        axis.line.x = element_line(color = NA, size = .5, linetype = 1),
+        axis.line.y = element_line(color = NA, size = .5, linetype = 1),
+panel.spacing = unit(0, units = 'in')) + 
+  coord_cartesian(y = c(0,1))
+
+```
