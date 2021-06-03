@@ -1,0 +1,36 @@
+TITLE: 2 level EFA for Harari data, s4
+
+DATA:
+FILE IS /data/jflournoy/hariri/harari.tsv;
+
+VARIABLE:
+NAMES ARE 
+cindur
+cinfreq
+coutdur
+coutfreq
+cvdur
+cvfreq
+sinfreq
+sinlen
+soutfreq
+soutlen
+id;
+USEVARIABLES = 
+cindur
+cinfreq
+coutdur
+coutfreq
+cvdur
+cvfreq
+sinfreq
+sinlen
+soutfreq
+soutlen;
+CLUSTER = id;
+MISSING is all(-9999);
+
+ANALYSIS:
+TYPE =TWOLEVEL EFA 3 4 UW 3 4 UB;
+OUTPUT:
+STDYX;

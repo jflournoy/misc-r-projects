@@ -392,3 +392,54 @@ Using the two most common methods I've seen to assess mediation (path-tracing, o
 For further reading about mediation as one of a family of causal claims, check out
 
 >Bullock, J. G., Green, D. P., & Ha, S. E. (2010). Yes, but what’s the mechanism? (don’t expect an easy answer). Journal of Personality and Social Psychology, 98(4), 550–558. http://doi.org/10.1037/a0018933
+
+
+```{r mediationdichot}
+
+dichotMediateModel <- function(aDF){
+    aDF$x2.d <- ifelse(aDF$x2 < mean(aDF$x2),0,1)
+    
+    model.m <- lm(z2 ~ x2.d, data = aDF)
+    model.y <- lm(y2 ~ x2.d + z2, data = aDF)
+    
+    mediateModel <- try(mediate(model.m = model.m, model.y = model.y, 
+                            sims = 500, boot = F,
+                            treat = 'x2.d', mediator = 'z2'))
+    if (identical(class(mediateModel), "try-error")){
+        rezlist <- list(coef = NA, se = NA, converged = FALSE)
+    } else {
+        coefVec <- c(d0 = mediateModel$d0, d1 = mediateModel$d0, 
+                     z0 = mediateModel$z0, z1 = mediateModel$d0,
+                     n0 = mediateModel$n0, n1 = mediateModel$n0)
+        
+        seVec <- c(d0 = NA, d1 = NA, 
+                   z0 = NA, z1 = NA,
+                   n0 = NA, n1 = NA)
+        
+        cilowerVec <- c(d0 = mediateModel$d0.ci[[1]], d1 = mediateModel$d0.ci[[1]], 
+                        z0 = mediateModel$z0.ci[[1]], z1 = mediateModel$d0.ci[[1]],
+                        n0 = mediateModel$n0.ci[[1]], n1 = mediateModel$n0.ci[[1]])
+        
+        ciupperVec <- c(d0 = mediateModel$d0.ci[[2]], d1 = mediateModel$d0.ci[[2]], 
+                        z0 = mediateModel$z0.ci[[2]], z1 = mediateModel$d0.ci[[2]],
+                        n0 = mediateModel$n0.ci[[2]], n1 = mediateModel$n0.ci[[2]])
+        
+        rezList <- list(coef = coefVec, se = seVec, cilower = cilowerVec, ciupper = ciupperVec, converged = TRUE)
+    }
+    
+    return(rezList)
+}
+
+if(REDOSIMS){
+    mediatePkgDichot <- simsem::sim(nRep = 8*10, n = 200, generate = generatingModel, 
+                                          model = dichotMediateModel,
+                                          multicore = TRUE, outfun = anOutfun)
+    saveRDS(mediatePkgDichot, 'mediatePkgDichot.RDS')
+} else {
+    mediatePkgDichot <- readRDS('mediatePkgDichot.RDS')
+}
+summary(mediatePkgDichot)
+
+cat(paste0("Proportion of simulations that reject null of no mediation: ",
+           mediationPower <- sum(unlist(getExtraOutput(mediatePkgDichot)))/mediatePkgDichot@nRep))
+```

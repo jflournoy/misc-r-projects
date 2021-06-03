@@ -1,0 +1,63 @@
+---
+title: "Bad Component: Port of Call Exploratory Factor Analysis"
+author: "John Flournoy"
+date: "`r Sys.Date()`"
+output: 
+    html_document:
+        toc: true
+        toc_float: true
+---
+
+Is your simpler factor structure a better measure of some superstructure, or is it just bad measurement?
+
+```{r echo=F, message=F, warning=F, error=F}
+knitr::opts_chunk$set(message=F,warning=F)
+```
+
+## Generating the data
+
+```{r}
+library(lavaan)
+library(simsem)
+library(semPlot)
+library(psych)
+```
+
+Generating 5 factors. We'll then add noise by (a) adding normally distributed noise on top of what is generated and (b) using only a single item from each factor. After that, let's see how many factors we can extract.
+
+```{r gen}
+set.seed(1431)
+generatingModel <- '
+
+f1 =~ y1 + y2 + y3 + y4 + y5
+f2 =~ y6 + y7 + y8 + y9 + y10
+f3 =~ y11 + y12 + y13 + y14 + y15
+f4 =~ y16 + y17 + y18 + y19 + y20
+f5 =~ y21 + y22 + y23 + y24 + y25
+
+f1 ~~ .2*f2 + .2*f3
+f2 ~~ .2*f3
+f4 ~~ .2*f5
+'
+
+aDF <- generate(model = generatingModel, n = 200)
+
+aVss <- vss(aDF, plot = F, n = 8)
+which(aVss$map == min(aVss$map))
+aVss
+scree(aDF)
+
+aLowItemDF <- aDF[, sample(seq(1,21, 5) + sample(0:4, size = 10, replace = T), 8)]
+aLowItemsVss <- vss(aLowItemDF, plot = F, n = 8)
+which(aLowItemsVss$map == min(aLowItemsVss$map))
+aLowItemsVss
+scree(aLowItemDF)
+
+aNoisyDF <- apply(aDF, 2, function(x) x + rnorm(n = length(x), mean = 0, sd = 1.5))
+aNoisyVss <- vss(aNoisyDF, plot = F, n = 8)
+which(aNoisyVss$map == min(aNoisyVss$map))
+aNoisyVss
+scree(aNoisyDF)
+
+```
+

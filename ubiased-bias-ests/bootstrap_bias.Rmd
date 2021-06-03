@@ -1,0 +1,90 @@
+---
+title: "Unbiased estimates of bias?"
+author: "John Flournoy"
+date: "10/17/2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r generate}
+kMuTypeA <- .4
+kMuTypeB <- .7
+kMuTypeC <- .2
+kPropTypeA <- .75
+kPropTypeB <- .18
+kPropTypeC <- 1-kPropTypeA-kPropTypeB
+kSampleProbTypeA <- .5
+kSampleProbTypeB <- .45
+kSampleProbTypeC <- 1-kPropTypeA-kPropTypeB
+kN <- 1000
+kTruMean <- weighted.mean(c(kMuTypeA, kMuTypeB, kMuTypeC), w = c(kPropTypeA, kPropTypeB, kPropTypeC))
+kBiasMean <- weighted.mean(c(kMuTypeA, kMuTypeB, kMuTypeC), w = c(kSampleProbTypeA, kSampleProbTypeB, kSampleProbTypeC))
+kBias <- kBiasMean - kTruMean
+
+biasedSamplePopVals <- sample(c(A=kMuTypeA, B=kMuTypeB, C=kMuTypeC), 
+                              size = kN, 
+                              replace = T, 
+                              prob = c(kSampleProbTypeA, kSampleProbTypeB, kSampleProbTypeC))
+
+biasedSampDF <- data.frame(popMu = biasedSamplePopVals, 
+                           type = names(biasedSamplePopVals),
+                           y = rnorm(kN, mean = biasedSamplePopVals, sd = 1))
+
+t.test(biasedSampDF$y)
+```
+
+Using the survey package to rake
+
+```{r}
+library(survey)
+
+#Population frequencies are also estimates
+kSizeForPropEst = 1e4
+propEsts <- rmultinom(n = 1, size = kSizeForPropEst, prob = c(kPropTypeA, kPropTypeB, kPropTypeC))/kSizeForPropEst
+
+biasedSampSvy <- svydesign(ids = ~1, data = biasedSampDF)
+popTypeDist <- data.frame(type = c('A', 'B', 'C'),
+                      Freq = nrow(biasedSampDF) * propEsts)
+biasedSampSvyRaked <- rake(design = biasedSampSvy,
+                      sample.margins = list(~type),
+                      population.margins = list(popTypeDist))
+
+(tTestRaked <- svyttest(y~1, biasedSampSvyRaked))
+(tTestBiased <- t.test(biasedSampDF$y))
+```
+
+Create a function to bootstrap.
+
+We simply resample without replacement, do the raking, calculate the bias, and return that calculation.
+
+```{r}
+library(boot)
+CalcEffSampBias <- function(data, i){
+  dataSvy <- svydesign(ids = ~1, data = data[i,])
+  popTypeDist <- data.frame(type = c('A', 'B', 'C'),
+                            Freq = nrow(data) * propEsts)
+  dataSvyRaked <- rake(design = dataSvy,
+                             sample.margins = list(~type),
+                             population.margins = list(popTypeDist))
+  tTestRaked <- svyttest(y~1, dataSvyRaked)
+  tTestBiased <- t.test(data$y)
+  meanEstRaked <- tTestRaked$estimate
+  meanEstBiased <- tTestBiased$estimate
+  biasEst <- meanEstBiased - meanEstRaked
+  return(biasEst)
+}
+
+CalcEffSampBias(biasedSampDF, 1:nrow(biasedSampDF))
+
+biasBootEst <- boot(biasedSampDF, CalcEffSampBias, R = 10000, parallel = 'multicore', ncpus = 8)
+print(biasBootEst)
+print(biasBootCI <- boot.ci(biasBootEst, conf = .95, type = "norm"))
+kBias > biasBootCI$normal[2] & kBias < biasBootCI$normal[1]
+```
+
+Of course we could bootstrap this entire procedure to ensure that 95% of the time our known bias is within the 95% confidence interval of the bootstrap estimate.
+
+Perhaps later.
